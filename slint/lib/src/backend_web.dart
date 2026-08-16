@@ -1,8 +1,6 @@
-
-
 /// The [SlintBackend] for the web, where `slint_dart` is a WebAssembly module.
 ///
-/// The module is the one `wasm-pack` builds out of `api/flutter/rust`: its
+/// The module is the one `wasm-pack` builds out of `rust`: its
 /// `wasm.rs` exposes the same entry points the C ABI has, taking strings and
 /// numbers so JavaScript — and therefore Dart — can call them without touching
 /// wasm memory. Handles are wasm addresses and mean nothing outside the module.

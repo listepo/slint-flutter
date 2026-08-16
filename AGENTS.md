@@ -1,7 +1,11 @@
-# AGENTS.md — api/flutter
+# AGENTS.md — slint-dart
 
 This file provides guidance to AI coding assistants working in the Dart and
 Flutter bindings for Slint. The UI is written in `.slint`, the logic in Dart.
+
+This repository was extracted from the Slint repository's `api/flutter`
+directory and now builds against released Slint crates from crates.io, so
+nothing here needs a Slint checkout.
 
 Four pieces live here, plus the Rust side they call into:
 
@@ -23,17 +27,17 @@ The Dart tests need a native library that `cargo` builds, so the Rust toolchain
 
 ## Build Commands
 
-The `slint-dart` crate lives in its own sub-workspace but shares the root
-`target/` directory (configured in the repository's `.cargo/config.toml`).
+The `slint-dart` crate is the repository root: `Cargo.toml` sits next to the
+Dart packages and its sources are in `rust/`.
 
 ```sh
 cargo build --release -p slint-dart      # the native library the bindings load
-cd api/flutter/slint && fvm dart pub get
+cd slint && fvm dart pub get
 ```
 
 The `cdylib` is named `libslint_dart` (`libslint_dart.dylib` on macOS,
-`libslint_dart.so` on Linux, `slint_dart.dll` on Windows) and lands in the
-shared `target/release/`.
+`libslint_dart.so` on Linux, `slint_dart.dll` on Windows) and lands in
+`target/release/`.
 
 `package:slint` finds the library by reading `SLINT_DART_LIBRARY` first, then
 walking up from the working directory, the running executable, the running
@@ -44,29 +48,33 @@ override discovery.
 
 ## Testing
 
-The Dart tests must open no window, so they run against the `backend-testing`
-feature and pin the library via `SLINT_DART_LIBRARY`:
+```sh
+cargo test -p slint-dart --no-default-features --features renderer-software
+```
+
+The Dart tests must open no window, which is what `SlintSurface` arranges: each
+suite creates one before the first component, so the software renderer is the
+Slint platform. There is deliberately no `backend-testing` feature — see the
+comment in `Cargo.toml` for why the published crate cannot provide one.
 
 ```sh
-cargo build -p slint-dart --features backend-testing
-cd api/flutter/slint
-SLINT_DART_LIBRARY="$PWD/../../../target/debug/libslint_dart.dylib" \
-  SLINT_BACKEND=testing fvm dart test
+cargo build -p slint-dart --no-default-features --features renderer-software
+cd slint
+SLINT_DART_LIBRARY="$PWD/../target/debug/libslint_dart.dylib" fvm dart test
 cd ../slint_flutter
-SLINT_DART_LIBRARY="$PWD/../../../target/debug/libslint_dart.dylib" \
-  SLINT_BACKEND=testing fvm flutter test
+SLINT_DART_LIBRARY="$PWD/../target/debug/libslint_dart.dylib" fvm flutter test
 ```
 
 The `slint_generator` builder tests use a fake generator and never load the
 native library, so they need no `SLINT_DART_LIBRARY`:
 
 ```sh
-cd api/flutter/slint_generator && fvm dart test && fvm dart analyze
+cd slint_generator && fvm dart test && fvm dart analyze
 ```
 
-`dart test` runs the build hook, which produces a default-feature library — that
-is why the test commands pin `SLINT_DART_LIBRARY` to the `backend-testing`
-build.
+`dart test` also runs the build hook, which produces a default-feature release
+library — that is why the commands above pin `SLINT_DART_LIBRARY` to the debug
+build they just made.
 
 ## The FFI bindings are generated
 
@@ -101,6 +109,10 @@ documented in the README.
   instead of opening a native window. This is what Flutter uses, because the
   Dart VM does not run `main()` on the process main thread and a second native
   window would not compose with the widget tree.
+- `rust/dart.rs` — the `.slint` → `.slint.dart` code generator that
+  `slint_dart_generate` drives. Its siblings for C++, Rust and Python live
+  inside `i-slint-compiler`; this one lives here so the binding can build
+  against a released Slint. It reads the compiler's LLR, all public API.
 
 ### The binding (`slint/`)
 
@@ -159,15 +171,17 @@ documented in the README.
 - Code style is enforced in CI: `dart format`/analyzer for Dart, `rustfmt` for
   Rust.
 
+- Every source file carries the two-line copyright and SPDX header. New files
+  get it too: `MIT` for this repository's own code, and whatever the original
+  carried for code lifted out of the Slint repository (`rust/dart.rs` and the
+  `scripts/`, which keep Slint's triple license).
+
 ## Version Control (Git)
 
 - Default branch is `main`; prefer linear history (rebase or squash).
-- Follow the repository's [Writing Style Guide](../../docs/internal/writing-style-guide.md)
-  for all comments, doc comments, and commit messages.
 
 ## Deep Dive Documentation
 
-- `api/flutter/README.md` — the authoritative user-facing guide for this
-  directory: building, testing, packaging (build hook, iOS xcframework), and
-  the two ways to show a UI (native window vs. `SlintSurface`).
-- Root `AGENTS.md` — repository-wide build, test, and architecture context.
+- [`README.md`](./README.md) — the authoritative user-facing guide: building,
+  testing, packaging (build hook, iOS xcframework, wasm), and the two ways to
+  show a UI (native window vs. `SlintSurface`).

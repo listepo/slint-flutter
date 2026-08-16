@@ -1,5 +1,3 @@
-
-
 name: slint_flutter
 description: A Flutter widget that renders a Slint user interface inside the widget tree.
 version: 1.18.0

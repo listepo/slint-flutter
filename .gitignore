@@ -11,7 +11,3 @@ target/
 .dart_tool/
 build/
 *.slint.dart
-
-# Python
-__pycache__/
-*.py[cod]

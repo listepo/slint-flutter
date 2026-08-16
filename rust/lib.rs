@@ -1,5 +1,3 @@
-
-
 // cSpell: ignore cdylib
 
 //! C ABI over `slint-interpreter`, shaped for `dart:ffi`.
@@ -32,10 +30,10 @@ use slint_interpreter::{
 };
 use std::collections::BTreeSet;
 use std::ffi::{CStr, CString, c_char, c_void};
-use std::io::Cursor;
 use std::path::PathBuf;
 use std::time::Duration;
 
+mod dart;
 mod embedded;
 
 #[cfg(target_arch = "wasm32")]
@@ -72,8 +70,8 @@ pub(crate) fn err(message: impl std::fmt::Display) -> *mut c_char {
 /// the caller can act on — creating a window off the main thread, for one — so
 /// every entry point that can reach interpreter code stops the unwind here in
 /// builds whose panic strategy supports unwinding and reports it like any other
-/// error. The workspace's release profile uses `panic = "abort"`, so release
-/// builds cannot intercept a panic.
+/// error. A profile built with `panic = "abort"` cannot intercept a panic; this
+/// crate leaves both profiles on the default `unwind` so that it can.
 pub(crate) fn guard(body: impl FnOnce() -> *mut c_char) -> *mut c_char {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(body))
         .unwrap_or_else(|panic| err(panic_message(&panic)))
@@ -276,8 +274,13 @@ fn generate_dart_bindings(
             &diagnostics,
         ));
     };
-    let format = OutputFormat::Dart;
-    let mut compiler_config = i_slint_compiler::CompilerConfiguration::new(format.clone());
+    // The generator lives in this crate (`dart.rs`), so the compiler has no
+    // output format of its own for it. `Llr` is the one to configure with:
+    // like the C++ and Python generators it embeds only builtin resources and
+    // leaves inlining alone, which is what a generator that reads the LLR
+    // wants. `Interpreter` would force inlining and resource decisions meant
+    // for the runtime that compiles the same file again at load time.
+    let mut compiler_config = i_slint_compiler::CompilerConfiguration::new(OutputFormat::Llr);
     compiler_config.include_paths = options.include_paths;
     compiler_config.style = options.style;
     let (document, diagnostics, loader) = spin_on::spin_on(i_slint_compiler::compile_syntax_node(
@@ -291,22 +294,8 @@ fn generate_dart_bindings(
         return Ok(dart_generation_result(None, Some(error), dependencies, &diagnostics));
     }
 
-    let mut generated = Cursor::new(Vec::new());
-    if let Err(error) = i_slint_compiler::generator::generate(
-        format,
-        &mut generated,
-        Some(&output_path),
-        &document,
-        &loader.compiler_config,
-    ) {
-        return Ok(dart_generation_result(
-            None,
-            Some(error.to_string()),
-            dependencies,
-            &diagnostics,
-        ));
-    }
-    let source = match String::from_utf8(generated.into_inner()) {
+    let generated = dart::generate(&document, &loader.compiler_config, Some(&output_path));
+    let source = match generated {
         Ok(source) => source,
         Err(error) => {
             return Ok(dart_generation_result(

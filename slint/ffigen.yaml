@@ -1,8 +1,6 @@
-
-
 # Generates `lib/src/ffi.g.dart` from the C header cbindgen writes out of
-# `api/flutter/rust`. Run `./scripts/generate_slint_dart_bindings.bash` from
-# the repository root, which regenerates the header first.
+# `rust/`. Run `./scripts/generate_slint_dart_bindings.bash` from the
+# repository root, which regenerates the header first.
 
 name: SlintBindings
 description: Bindings for the slint-dart C ABI, generated from its header.
@@ -15,7 +13,7 @@ llvm-path:
 
 headers:
   entry-points:
-    - '../../../target/slint_dart.h'
+    - '../target/slint_dart.h'
   # Without this, everything reachable through <stdlib.h> and friends comes
   # along: ~800 system macros for 37 functions.
   include-directives:

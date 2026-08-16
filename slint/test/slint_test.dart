@@ -1,5 +1,3 @@
-
-
 import 'dart:io';
 
 import 'package:slint/slint.dart';
@@ -28,6 +26,13 @@ export component App {
 
 void main() {
   late ComponentInstance app;
+
+  // Instantiating a component needs a Slint platform, and the default one
+  // opens a native window — which macOS only allows on the process main
+  // thread, where the Dart VM does not run `main()`. Installing the software
+  // renderer first gives every component a windowless surface instead. It has
+  // to happen before the first component exists, hence `setUpAll`.
+  setUpAll(SlintSurface.new);
 
   setUp(() => app = loadSource(_app));
   tearDown(() => app.dispose());

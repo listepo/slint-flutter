@@ -1,5 +1,3 @@
-
-
 builders:
   slint:
     import: "package:slint_generator/builder.dart"

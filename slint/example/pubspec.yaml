@@ -1,5 +1,3 @@
-
-
 name: slint_codegen_example
 description: A typed Slint code-generation example for Dart.
 publish_to: none

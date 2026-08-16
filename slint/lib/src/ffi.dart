@@ -1,14 +1,12 @@
-
-
 /// `dart:ffi` bindings for the `slint_dart` shared library.
 ///
 /// The entry points are generated into `ffi.g.dart` by ffigen, from the C
-/// header cbindgen writes out of `api/flutter/rust`. This file adds the two
+/// header cbindgen writes out of `rust`. This file adds the two
 /// things a generator cannot: how the library is found at runtime, and the
 /// conversions for the JSON envelope both sides speak.
 ///
 /// Everything here is private to the package; [package:slint/slint.dart] is the
-/// API users see. The C side is documented in `api/flutter/rust/lib.rs`.
+/// API users see. The C side is documented in `rust/lib.rs`.
 library;
 
 import 'dart:convert';

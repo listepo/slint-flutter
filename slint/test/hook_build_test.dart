@@ -1,5 +1,3 @@
-
-
 import 'dart:ffi' show Abi;
 import 'dart:io';
 
@@ -76,8 +74,8 @@ void main() {
     }
 
     // The hook builds with the default `release` cargo profile, which never
-    // touches the `target/debug` library that the other tests load with
-    // `--features backend-testing`.
+    // touches the `target/debug` library the other suites load through
+    // `SLINT_DART_LIBRARY`.
     await hooks_test.testBuildHook(
       mainMethod: build_hook.main,
       extensions: [
@@ -103,10 +101,12 @@ void main() {
             '${build_hook.assetName}.${build_hook.libraryExtension(os)}');
 
         // The crate manifest and sources are declared so the hook cache
-        // invalidates when they change.
+        // invalidates when they change. They sit next to the `slint` package,
+        // one level up, which is also the Cargo workspace root.
+        final crateRoot = input.packageRoot.resolve('../');
         final dependencies = output.dependencies.map((uri) => uri.path).toSet();
-        expect(dependencies, contains(endsWith('api/flutter/Cargo.toml')));
-        expect(dependencies, contains(endsWith('api/flutter/rust')));
+        expect(dependencies, contains(crateRoot.resolve('Cargo.toml').path));
+        expect(dependencies, contains(crateRoot.resolve('rust').path));
         expect(dependencies, contains(endsWith('Cargo.lock')));
       },
     );

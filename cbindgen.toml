@@ -3,7 +3,7 @@
 # `./scripts/generate_slint_dart_bindings.bash`.
 
 language = "C"
-autogen_warning = "// Generated from api/flutter/rust by cbindgen. Do not edit."
+autogen_warning = "// Generated from rust by cbindgen. Do not edit."
 include_guard = "SLINT_DART_H"
 # The five handles are Slint interpreter types that only ever cross the ABI
 # behind a pointer, so cbindgen cannot see their definitions and would leave

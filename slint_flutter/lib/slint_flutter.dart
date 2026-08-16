@@ -1,5 +1,3 @@
-
-
 /// A Flutter widget that renders a Slint user interface.
 ///
 /// ```dart

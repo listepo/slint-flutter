@@ -1,5 +1,3 @@
-
-
 import 'package:slint_codegen_example/ui/counter.slint.dart';
 
 void main() {

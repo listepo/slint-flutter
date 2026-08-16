@@ -1,8 +1,6 @@
-
-
 /// Embedded mode: Slint renders into a buffer you own.
 ///
-/// See `api/flutter/rust/embedded.rs` for why this exists — in short, the Dart
+/// See `rust/embedded.rs` for why this exists — in short, the Dart
 /// VM does not run `main()` on the process main thread, which a native event
 /// loop requires on macOS, and inside Flutter a second native window would not
 /// compose with the widget tree anyway.

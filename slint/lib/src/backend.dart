@@ -1,5 +1,3 @@
-
-
 /// What the Dart runtime needs from the `slint_dart` library, with the
 /// platform's marshalling hidden behind it.
 ///

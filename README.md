@@ -36,23 +36,23 @@ stays out of the shipped application:
 ```yaml
 dependencies:
   slint:
-    path: path/to/slint/api/flutter/slint
+    path: path/to/slint-dart/slint
 
 dev_dependencies:
   build_runner: ^2.4.9
   slint_generator:
-    path: path/to/slint/api/flutter/slint_generator
+    path: path/to/slint-dart/slint_generator
 ```
 
 Build `libslint_dart` before invoking the generator.
-When the application is outside the Slint repository, set
-`SLINT_DART_LIBRARY` to the built library's absolute path:
+When the application is outside this repository, set `SLINT_DART_LIBRARY` to
+the built library's absolute path:
 
 ```sh
-# From the Slint repository root:
+# From this repository's root:
 cargo build --release -p slint-dart
 # macOS:
-export SLINT_DART_LIBRARY=/path/to/slint/target/release/libslint_dart.dylib
+export SLINT_DART_LIBRARY=/path/to/slint-dart/target/release/libslint_dart.dylib
 ```
 
 Use `libslint_dart.so` on Linux.
@@ -154,9 +154,11 @@ lowerCamelCase:
 | `callback count-changed(int)` | `onCountChanged(...)`, `invokeCountChanged(...)` |
 | `public function reset_counter()` | `invokeResetCounter()` |
 
-The generated wrapper keeps each exact Slint spelling for runtime lookup.
-Only the public Dart identifier changes, so `current-count` and `reset_counter`
-aren't reconstructed from their Dart names.
+The generated wrapper keeps the Slint spelling for runtime lookup, so the
+public Dart identifier is never reconstructed from the Dart name.
+The compiler reports those names in their canonical form, with `_` written as
+`-`, and the Slint runtime treats the two as the same identifier — so
+`reset_counter` is looked up as `"reset-counter"`.
 
 Code generation is optional.
 Use `loadFile()` or `loadSource()` and the string-based `ComponentInstance` API
@@ -274,7 +276,7 @@ set, the cargo profile, the output path and the minimum OS versions.
 ### The web loads a WebAssembly module
 
 A browser has no `dart:ffi`, so `package:slint` reaches the same Rust code
-through WebAssembly instead: `api/flutter/rust/wasm.rs` exposes the runtime to
+through WebAssembly instead: `rust/wasm.rs` exposes the runtime to
 JavaScript with `wasm-bindgen`, and
 [`backend_web.dart`](./slint/lib/src/backend_web.dart) calls it over
 `dart:js_interop`. Everything above that line — properties, callbacks, the
@@ -323,9 +325,9 @@ the way the Python and Node.js bindings do. Use this for a plain
 **This does not work on macOS**, and not inside Flutter on any platform: the
 Dart VM does not run `main()` on the process main thread, which is where a
 native event loop has to live.
-Unwind-enabled builds report this as a `SlintException`.
-The workspace release profile aborts on panic, so don't call `run()` in these
-environments from a release build.
+Both cargo profiles here unwind on panic, so the binding catches that and
+reports it as a `SlintException` instead of aborting the host application.
+A profile configured with `panic = "abort"` would lose that.
 On Linux and Windows it works.
 
 ### Slint draws into a buffer you own
@@ -414,22 +416,30 @@ Globals work the same way through `app.global('PrinterQueue')`.
 cargo test -p slint-dart
 ```
 
-The Dart tests need a backend that opens no window, and they must load the
-library built with that backend — `dart test` runs the build hook, which
-produces a default-feature library, so pin `SLINT_DART_LIBRARY`:
+The Dart tests need a backend that opens no window, which is what `SlintSurface`
+installs: every suite creates one before loading a component, so the software
+renderer is the platform and no native window is ever opened. That works on
+every host, including macOS, where the Dart VM's worker thread cannot own a
+native event loop.
 
 ```sh
-cargo build -p slint-dart --features backend-testing
+cargo build -p slint-dart --no-default-features --features renderer-software
 cd slint
-SLINT_DART_LIBRARY="$PWD/../../../target/debug/libslint_dart.dylib" \
-  SLINT_BACKEND=testing fvm dart test
+SLINT_DART_LIBRARY="$PWD/../target/debug/libslint_dart.dylib" fvm dart test
 cd ../slint_flutter
-SLINT_DART_LIBRARY="$PWD/../../../target/debug/libslint_dart.dylib" \
-  SLINT_BACKEND=testing fvm flutter test
+SLINT_DART_LIBRARY="$PWD/../target/debug/libslint_dart.dylib" fvm flutter test
+cd ../slint_generator
+fvm dart test    # a fake generator, so no native library is needed
 ```
 
-Running the tests also needs the Rust toolchain, because the build hook
-compiles the library as part of the test build.
+Pinning `SLINT_DART_LIBRARY` is what keeps the suites on that debug build:
+`dart test` also runs the build hook, which produces a default-feature release
+library. Running the tests therefore needs the Rust toolchain either way.
+
+There is no `SLINT_BACKEND=testing` here. It would need a `backend-testing`
+feature, and the published `i-slint-backend-testing` cannot build the
+`internal` feature that the backend selector turns on with it — the crate
+embeds a font directory that only exists inside the Slint repository.
 
 ## Toolchain
 
@@ -439,8 +449,10 @@ every command above is available as `fvm dart …` and `fvm flutter …`. Run
 
 ## Examples
 
-- [`examples/todo/flutter`](../../examples/todo/flutter) — the todo example.
-- [`demos/printerdemo/flutter`](../../demos/printerdemo/flutter) — the printer demo.
+- [`slint/example`](./slint/example) — the code-generation example, a plain
+  `dart run` application.
+- The Flutter todo example and printer demo live in the Slint repository, under
+  `examples/todo/flutter` and `demos/printerdemo/flutter`.
 
 ## Limitations
 

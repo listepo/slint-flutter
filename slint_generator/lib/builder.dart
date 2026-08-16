@@ -1,5 +1,3 @@
-
-
 /// Code generation support for `package:build`.
 library;
 

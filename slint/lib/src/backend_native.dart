@@ -1,5 +1,3 @@
-
-
 /// The [SlintBackend] for platforms with a shared library and `dart:ffi`.
 ///
 /// It owns every pointer: handles leave as addresses, strings are copied in

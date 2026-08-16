@@ -1,5 +1,3 @@
-
-
 /// The compiler behind the code generator.
 ///
 /// `package:slint_generator` calls this from its `build_runner` builder;

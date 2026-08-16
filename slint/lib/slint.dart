@@ -1,5 +1,3 @@
-
-
 /// Slint for Dart and Flutter.
 ///
 /// Write the user interface in `.slint`, the logic in Dart:

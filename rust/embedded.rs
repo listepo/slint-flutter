@@ -1,5 +1,3 @@
-
-
 //! Embedded mode: Slint draws into a buffer the caller owns.
 //!
 //! The rest of this crate lets Slint open its own window, which is what the

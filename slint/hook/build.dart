@@ -1,5 +1,3 @@
-
-
 // cSpell: ignore rustup
 
 import 'dart:convert';
@@ -138,8 +136,8 @@ Future<Uri> cargoBuild(Uri crateRoot, String profile) async {
         '${Platform.operatingSystem} yet.',
       ),
   };
-  // The slint-dart crate is a workspace member, so the artifact lands in the
-  // workspace's shared target directory, not next to the crate.
+  // Ask cargo where the artifact went rather than assuming `<crate>/target`:
+  // a `CARGO_TARGET_DIR` or a `.cargo/config.toml` can point it elsewhere.
   final metadata = await Process.run(
     cargo,
     ['metadata', '--format-version', '1', '--no-deps'],

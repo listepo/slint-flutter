@@ -1,5 +1,3 @@
-
-
 //! The web build's entry points.
 //!
 //! A browser cannot call the C ABI the other platforms use, so this wraps it

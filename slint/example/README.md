@@ -9,7 +9,7 @@ cargo build --release -p slint-dart
 Fetch the Dart dependencies and generate the typed wrapper:
 
 ```sh
-cd api/flutter/slint/example
+cd slint/example
 fvm dart pub get
 fvm dart run build_runner build --delete-conflicting-outputs
 ```

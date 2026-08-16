@@ -1,5 +1,3 @@
-
-
 // GENERATED. Do not edit by hand. See ffigen.yaml.
 // ignore_for_file: always_specify_types, camel_case_types
 // ignore_for_file: non_constant_identifier_names, unused_element
