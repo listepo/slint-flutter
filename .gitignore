@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# JetBrains IDEs
+.idea/
+
+# Rust
+target/
+
+# Dart / Flutter build output
+.dart_tool/
+build/
+*.slint.dart
+
+# Python
+__pycache__/
+*.py[cod]
