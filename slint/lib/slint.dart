@@ -20,7 +20,8 @@
 ///
 /// Values cross the boundary as plain Dart data: `num`, `String`, `bool`,
 /// `List`, and `Map<String, Object?>` for Slint structs. Colors and brushes are
-/// CSS-style strings such as `'#00ffffff'`.
+/// CSS-style strings such as `'#00ffffff'`. Images are [SlintImage].
+/// `@tr(...)` strings go through [initTranslations].
 ///
 /// Everything in this library must be used from the main isolate, because
 /// that is where the Slint event loop runs. That matches the constraint the
@@ -35,6 +36,7 @@ import 'src/diagnostics.dart';
 export 'src/diagnostics.dart' show Diagnostic, SlintException;
 export 'src/embedded.dart'
     show KeyEventKind, PointerButton, PointerEventKind, SlintKey, SlintSurface;
+export 'src/image.dart' show SlintImage;
 
 /// A handler for a Slint callback. It receives the callback arguments and
 /// returns the callback's result, or null for a callback that returns nothing.
@@ -108,7 +110,11 @@ var _dispatchersInstalled = false;
 
 void _installDispatchers() {
   if (_dispatchersInstalled) return;
-  backend.installDispatchers(_dispatchCallback, _dispatchTimer);
+  backend.installDispatchers(
+    _dispatchCallback,
+    _dispatchTimer,
+    _dispatchTranslate,
+  );
   _dispatchersInstalled = true;
 }
 
@@ -338,6 +344,53 @@ void runEventLoop() => backend.runEventLoop();
 
 /// Make the running event loop return.
 void quitEventLoop() => backend.quitEventLoop();
+
+// ---------------------------------------------------------------------------
+// Translations
+// ---------------------------------------------------------------------------
+
+/// A function that translates a `@tr(...)` string from `.slint`.
+///
+/// [string] is the original text. [context] is the `msgctxt` when the `.slint`
+/// supplied one. [plural] and [n] are set for plural forms; implementations
+/// typically default [n] to 0.
+typedef SlintTranslator = String Function(
+  String string, {
+  String? context,
+  String? plural,
+  int n,
+});
+
+SlintTranslator? _translator;
+
+String? _dispatchTranslate(String requestJson) {
+  final translator = _translator;
+  if (translator == null) return null;
+  try {
+    final request = jsonDecode(requestJson) as Map<String, dynamic>;
+    return jsonEncode(translator(
+      request['string'] as String,
+      context: request['context'] as String?,
+      plural: request['plural'] as String?,
+      n: (request['n'] as num?)?.toInt() ?? 0,
+    ));
+  } on Object catch (error, stack) {
+    backend.reportError('Slint translation failed: $error\n$stack');
+    return null;
+  }
+}
+
+/// Install [translator] for `@tr(...)` strings, or pass null to go back to
+/// the original text.
+///
+/// Create a [SlintSurface] or a component first so the Slint platform exists.
+/// A typical body looks up [string] in an `intl` catalog, or a map of
+/// translations you loaded yourself.
+void initTranslations(SlintTranslator? translator) {
+  _translator = translator;
+  _installDispatchers();
+  backend.initTranslations(translator != null);
+}
 
 /// A timer driven by the Slint event loop.
 ///

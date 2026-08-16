@@ -86,6 +86,11 @@ extension type _SlintModule(JSObject _) implements JSObject {
   external void setCallbackDispatcher(JSFunction dispatcher);
   @JS('set_timer_dispatcher')
   external void setTimerDispatcher(JSFunction dispatcher);
+  @JS('set_translate_dispatcher')
+  external void setTranslateDispatcher(JSFunction dispatcher);
+
+  @JS('init_translations')
+  external String initTranslations(bool enabled);
 
   @JS('timer_start')
   external int timerStart(bool repeated, double intervalMs, int id);
@@ -125,6 +130,7 @@ class WebBackend implements SlintBackend {
 
   CallbackDispatch? _onCallback;
   TimerDispatch? _onTimer;
+  TranslateDispatch? _onTranslate;
 
   _SlintModule get _slint {
     final module = _module;
@@ -150,9 +156,14 @@ class WebBackend implements SlintBackend {
   }
 
   @override
-  void installDispatchers(CallbackDispatch onCallback, TimerDispatch onTimer) {
+  void installDispatchers(
+    CallbackDispatch onCallback,
+    TimerDispatch onTimer,
+    TranslateDispatch onTranslate,
+  ) {
     _onCallback = onCallback;
     _onTimer = onTimer;
+    _onTranslate = onTranslate;
     if (_module != null) _installDispatchers();
   }
 
@@ -167,6 +178,12 @@ class WebBackend implements SlintBackend {
     );
     module.setTimerDispatcher(
       ((JSNumber id) => _onTimer?.call(id.toDartInt)).toJS,
+    );
+    module.setTranslateDispatcher(
+      ((JSString requestJson) {
+        final result = _onTranslate?.call(requestJson.toDart);
+        return result?.toJS;
+      }).toJS,
     );
   }
 
@@ -278,6 +295,10 @@ class WebBackend implements SlintBackend {
 
   @override
   void timerFree(int timer) => _slint.timerFree(timer);
+
+  @override
+  void initTranslations(bool enabled) =>
+      decodeEnvelope(_slint.initTranslations(enabled));
 
   // Embedded rendering -----------------------------------------------------
 

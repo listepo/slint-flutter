@@ -618,6 +618,44 @@ class SlintBindings {
   late final _timerFree =
       _timerFreePtr.asFunction<void Function(ffi.Pointer<SlintTimerHandle>)>();
 
+  /// Install a Dart function as the translator for `@tr(...)` strings.
+  ///
+  /// The callback receives a JSON object `{"string", "context", "plural", "n"}`
+  /// and returns a JSON string — the translated text — which `free_result`
+  /// then releases. A null return keeps the original string.
+  /// `enabled` is false to uninstall and fall back to the original strings.
+  ///
+  /// The Slint platform has to exist first, which `SlintSurface` or creating a
+  /// component both arrange.
+  ///
+  /// # Safety
+  /// `callback` and `free_result` must stay valid for as long as they remain
+  /// installed. `user_data` must stay meaningful for that long too.
+  ffi.Pointer<ffi.Char> initTranslations(
+    DartCallback callback,
+    DartFree free_result,
+    ffi.Pointer<ffi.Void> user_data,
+    bool enabled,
+  ) {
+    return _initTranslations(
+      callback,
+      free_result,
+      user_data,
+      enabled,
+    );
+  }
+
+  late final _initTranslationsPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(
+              DartCallback,
+              DartFree,
+              ffi.Pointer<ffi.Void>,
+              ffi.Bool)>>('slint_dart_init_translations');
+  late final _initTranslations = _initTranslationsPtr.asFunction<
+      ffi.Pointer<ffi.Char> Function(
+          DartCallback, DartFree, ffi.Pointer<ffi.Void>, bool)>();
+
   /// Install the software renderer as the Slint platform.
   ///
   /// Must be called before the first component is instantiated, and only makes

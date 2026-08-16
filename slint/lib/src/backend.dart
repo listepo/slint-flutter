@@ -28,6 +28,11 @@ typedef CallbackDispatch = String? Function(int id, String argsJson);
 /// Runs a Slint timer callback.
 typedef TimerDispatch = void Function(int id);
 
+/// Translates a `@tr(...)` string. [requestJson] is JSON for an object with
+/// `string`, `context`, `plural`, and `n`; the return is a JSON string, or
+/// null to keep the original.
+typedef TranslateDispatch = String? Function(String requestJson);
+
 /// Decode a `{"ok": …}` / `{"err": …}` envelope, the reply shape every
 /// fallible entry point uses.
 ///
@@ -47,8 +52,12 @@ abstract interface class SlintBackend {
   Future<void> initialize({String? scriptUrl});
 
   /// Install the functions Slint calls back into Dart with. Called once,
-  /// before any callback or timer is registered.
-  void installDispatchers(CallbackDispatch onCallback, TimerDispatch onTimer);
+  /// before any callback, timer, or translator is registered.
+  void installDispatchers(
+    CallbackDispatch onCallback,
+    TimerDispatch onTimer,
+    TranslateDispatch onTranslate,
+  );
 
   /// Report a failure that escaped a Dart handler, where throwing is not an
   /// option because the call came from native code.
@@ -110,6 +119,9 @@ abstract interface class SlintBackend {
 
   int timerStart(bool repeated, int intervalMs, int id);
   void timerFree(int timer);
+
+  /// Install or remove the Dart translator. False restores the original strings.
+  void initTranslations(bool enabled);
 
   // Embedded rendering -----------------------------------------------------
 

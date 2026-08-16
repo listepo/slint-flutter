@@ -24,7 +24,6 @@
 
 use i_slint_compiler::langtype::{Function, Type};
 use i_slint_core::timers::{Timer, TimerMode};
-use slint_interpreter::json::{value_from_json_str, value_to_json};
 use slint_interpreter::{
     CompilationResult, Compiler, ComponentDefinition, ComponentHandle, ComponentInstance, Value,
 };
@@ -33,8 +32,11 @@ use std::ffi::{CStr, CString, c_char, c_void};
 use std::path::PathBuf;
 use std::time::Duration;
 
+use values::{dart_value_from_json, dart_value_from_json_str, dart_value_to_json};
+
 mod dart;
 mod embedded;
+mod values;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm;
@@ -142,15 +144,15 @@ fn parse_args(json: &str, signature: &Function) -> Result<Vec<Value>, String> {
     if array.len() != signature.args.len() {
         return Err(format!("expected {} argument(s), got {}", signature.args.len(), array.len()));
     }
-    array
-        .iter()
-        .zip(signature.args.iter())
-        .map(|(v, ty)| slint_interpreter::json::value_from_json(ty, v))
-        .collect()
+    array.iter().zip(signature.args.iter()).map(|(v, ty)| dart_value_from_json(ty, v)).collect()
 }
 
 fn values_to_json(values: &[Value]) -> Result<serde_json::Value, String> {
-    values.iter().map(value_to_json).collect::<Result<Vec<_>, _>>().map(serde_json::Value::Array)
+    values
+        .iter()
+        .map(dart_value_to_json)
+        .collect::<Result<Vec<_>, _>>()
+        .map(serde_json::Value::Array)
 }
 
 fn diagnostics_json(
@@ -575,7 +577,7 @@ pub unsafe extern "C" fn slint_dart_instance_get_property(
             None => instance.get_property(name).map_err(|e| e.to_string()),
             Some(global) => instance.get_global_property(global, name).map_err(|e| e.to_string()),
         };
-        match value.and_then(|v| value_to_json(&v)) {
+        match value.and_then(|v| dart_value_to_json(&v)) {
             Ok(json) => ok(json),
             Err(e) => err(e),
         }
@@ -602,7 +604,7 @@ pub unsafe extern "C" fn slint_dart_instance_set_property(
         let Some(ty) = lookup_type(&instance.definition(), global, name) else {
             return err(format!("no such property: {name}"));
         };
-        let value = match value_from_json_str(&ty, json) {
+        let value = match dart_value_from_json_str(&ty, json) {
             Ok(value) => value,
             Err(e) => return err(e),
         };
@@ -648,7 +650,7 @@ pub unsafe extern "C" fn slint_dart_instance_invoke(
             None => instance.invoke(name, &args).map_err(|e| e.to_string()),
             Some(global) => instance.invoke_global(global, name, &args).map_err(|e| e.to_string()),
         };
-        match result.and_then(|v| value_to_json(&v)) {
+        match result.and_then(|v| dart_value_to_json(&v)) {
             Ok(json) => ok(json),
             Err(e) => err(e),
         }
@@ -694,7 +696,7 @@ impl DartHandler {
         let json = unsafe { CStr::from_ptr(returned) }.to_string_lossy().into_owned();
         unsafe { (self.free_result)(returned) };
 
-        match value_from_json_str(&self.return_type, &json) {
+        match dart_value_from_json_str(&self.return_type, &json) {
             Ok(value) => value,
             Err(e) => {
                 eprintln!("Slint: cannot convert the Dart callback result: {e}");
@@ -815,6 +817,106 @@ pub unsafe extern "C" fn slint_dart_timer_free(timer: *mut Timer) {
     if !timer.is_null() {
         drop(unsafe { Box::from_raw(timer) });
     }
+}
+
+// ---------------------------------------------------------------------------
+// Translations
+//
+// `@tr(...)` in `.slint` asks the host language for a string. Python hands
+// Slint a gettext object; Dart hands it a callback, which is what `intl` and
+// a hand-written map both look like.
+// ---------------------------------------------------------------------------
+
+struct DartTranslator {
+    callback: DartCallback,
+    free_result: DartFree,
+    user_data: usize,
+}
+
+impl i_slint_core::translations::Translator for DartTranslator {
+    fn translate<'a>(
+        &'a self,
+        string: &'a str,
+        context: Option<&'a str>,
+    ) -> std::borrow::Cow<'a, str> {
+        std::borrow::Cow::Owned(self.invoke(string, context, None, 1))
+    }
+
+    fn ntranslate<'a>(
+        &'a self,
+        n: u64,
+        singular: &'a str,
+        plural: &'a str,
+        context: Option<&'a str>,
+    ) -> std::borrow::Cow<'a, str> {
+        std::borrow::Cow::Owned(self.invoke(singular, context, Some(plural), n))
+    }
+}
+
+impl DartTranslator {
+    fn invoke(&self, string: &str, context: Option<&str>, plural: Option<&str>, n: u64) -> String {
+        let payload = serde_json::json!({
+            "string": string,
+            "context": context,
+            "plural": plural,
+            "n": n,
+        })
+        .to_string();
+        let Ok(payload) = CString::new(payload) else {
+            return fallback(string, plural, n);
+        };
+        let returned = unsafe { (self.callback)(self.user_data as *mut c_void, payload.as_ptr()) };
+        if returned.is_null() {
+            return fallback(string, plural, n);
+        }
+        let json = unsafe { CStr::from_ptr(returned) }.to_string_lossy().into_owned();
+        unsafe { (self.free_result)(returned) };
+        match serde_json::from_str::<serde_json::Value>(&json) {
+            Ok(serde_json::Value::String(translated)) => translated,
+            _ => fallback(string, plural, n),
+        }
+    }
+}
+
+fn fallback(string: &str, plural: Option<&str>, n: u64) -> String {
+    if n == 1 || plural.is_none() { string } else { plural.unwrap() }.to_string()
+}
+
+/// Install a Dart function as the translator for `@tr(...)` strings.
+///
+/// The callback receives a JSON object `{"string", "context", "plural", "n"}`
+/// and returns a JSON string — the translated text — which `free_result`
+/// then releases. A null return keeps the original string.
+/// `enabled` is false to uninstall and fall back to the original strings.
+///
+/// The Slint platform has to exist first, which `SlintSurface` or creating a
+/// component both arrange.
+///
+/// # Safety
+/// `callback` and `free_result` must stay valid for as long as they remain
+/// installed. `user_data` must stay meaningful for that long too.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn slint_dart_init_translations(
+    callback: DartCallback,
+    free_result: DartFree,
+    user_data: *mut c_void,
+    enabled: bool,
+) -> *mut c_char {
+    guard(|| {
+        let translator = enabled.then(|| {
+            Box::new(DartTranslator { callback, free_result, user_data: user_data as usize })
+                as Box<dyn i_slint_core::translations::Translator>
+        });
+        match i_slint_core::with_global_context(
+            || Err(i_slint_core::platform::PlatformError::NoPlatform),
+            |ctx| ctx.set_external_translator(translator),
+        ) {
+            Ok(()) => ok_void(),
+            Err(error) => err(format!(
+                "{error}; create a SlintSurface or a component before installing translations"
+            )),
+        }
+    })
 }
 
 #[cfg(test)]
@@ -1125,6 +1227,7 @@ mod tests {
                 import { Shared } from "shared.slint";
                 export component MainWindow inherits Shared {
                     in-out property <int> todo-model;
+                    in-out property <image> icon;
                     callback todo_added(string);
                     public function do_work(value: int) -> int { value }
                 }
@@ -1140,6 +1243,8 @@ mod tests {
         });
         let source = generated["source"].as_str().unwrap();
         assert!(source.contains("int get todoModel"), "{source}");
+        assert!(source.contains("slint.SlintImage get icon"), "{source}");
+        assert!(source.contains("slint.SlintImage.fromSlint"), "{source}");
         assert!(source.contains("void onTodoAdded"), "{source}");
         assert!(source.contains("int invokeDoWork"), "{source}");
         assert!(source.contains("getProperty(\"todo-model\")"), "{source}");
@@ -1328,6 +1433,93 @@ mod tests {
         unsafe { slint_dart_definition_free(definition) };
         unsafe { slint_dart_result_free(result) };
         unsafe { slint_dart_compiler_free(compiler) };
+    }
+
+    #[test]
+    fn images_round_trip_from_pixels_and_from_a_path() {
+        let instance = instantiate(
+            r#"
+                export component App {
+                    in-out property <image> icon;
+                }
+            "#,
+        );
+
+        assert_eq!(unwrap_ok(unsafe { get(&instance, None, "icon") }), serde_json::Value::Null);
+
+        let rgba = vec![255u8, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255];
+        let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &rgba);
+        unwrap_ok(unsafe {
+            set(
+                &instance,
+                None,
+                "icon",
+                &serde_json::json!({"width": 2, "height": 2, "rgba": encoded}).to_string(),
+            )
+        });
+        let got = unwrap_ok(unsafe { get(&instance, None, "icon") });
+        assert_eq!(got["width"], 2);
+        assert_eq!(got["height"], 2);
+        let round_trip = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            got["rgba"].as_str().unwrap(),
+        )
+        .unwrap();
+        assert_eq!(round_trip, rgba);
+
+        assert!(
+            unwrap_err(unsafe { set(&instance, None, "icon", "\"/definitely/not/here.png\"") })
+                .contains("Failed to load image from path")
+        );
+
+        let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="#00ff00"/></svg>"##;
+        unwrap_ok(unsafe {
+            set(&instance, None, "icon", &serde_json::json!({ "svg": svg }).to_string())
+        });
+        let loaded = unwrap_ok(unsafe { get(&instance, None, "icon") });
+        assert_eq!(loaded["width"], 2);
+        assert_eq!(loaded["height"], 2);
+    }
+
+    unsafe extern "C" fn shout_translate(
+        _user_data: *mut c_void,
+        args_json: *const c_char,
+    ) -> *mut c_char {
+        let request: serde_json::Value =
+            serde_json::from_str(unsafe { CStr::from_ptr(args_json) }.to_str().unwrap()).unwrap();
+        let string = request["string"].as_str().unwrap().to_uppercase();
+        into_c_string(serde_json::Value::from(string).to_string())
+    }
+
+    #[test]
+    fn translations_replace_tr_strings() {
+        let instance = instantiate(
+            r#"
+                export component App {
+                    in-out property <string> greeting: @tr("Hello");
+                }
+            "#,
+        );
+        assert_eq!(unwrap_ok(unsafe { get(&instance, None, "greeting") }), "Hello");
+
+        unwrap_ok(unsafe {
+            slint_dart_init_translations(
+                shout_translate,
+                free_handler_result,
+                std::ptr::null_mut(),
+                true,
+            )
+        });
+        assert_eq!(unwrap_ok(unsafe { get(&instance, None, "greeting") }), "HELLO");
+
+        unwrap_ok(unsafe {
+            slint_dart_init_translations(
+                shout_translate,
+                free_handler_result,
+                std::ptr::null_mut(),
+                false,
+            )
+        });
     }
 
     // Thin wrappers so the tests above read as calls rather than pointer juggling.

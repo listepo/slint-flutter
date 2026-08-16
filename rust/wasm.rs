@@ -327,6 +327,51 @@ pub fn timer_free(timer: u32) {
     unsafe { crate::slint_dart_timer_free(timer as usize as *mut _) };
 }
 
+thread_local! {
+    static TRANSLATE_DISPATCHER: RefCell<Option<js_sys::Function>> = const { RefCell::new(None) };
+}
+
+/// Install the function that translates `@tr(...)` strings. It receives a JSON
+/// object and returns the translation as a JSON string.
+#[wasm_bindgen]
+pub fn set_translate_dispatcher(dispatcher: js_sys::Function) {
+    TRANSLATE_DISPATCHER.with_borrow_mut(|slot| *slot = Some(dispatcher));
+}
+
+unsafe extern "C" fn call_translate_dispatcher(
+    _user_data: *mut c_void,
+    args_json: *const c_char,
+) -> *mut c_char {
+    let args = unsafe { CStr::from_ptr(args_json) }.to_string_lossy().into_owned();
+    let returned = TRANSLATE_DISPATCHER.with_borrow(|dispatcher| {
+        dispatcher.as_ref().and_then(|dispatcher| {
+            dispatcher
+                .call1(&JsValue::NULL, &JsValue::from_str(&args))
+                .ok()
+                .and_then(|value| value.as_string())
+        })
+    });
+    match returned {
+        Some(value) => c_string(&value).into_raw(),
+        None => std::ptr::null_mut(),
+    }
+}
+
+/// Install or remove the Dart translator. When `enabled` is true the
+/// dispatcher set by [`set_translate_dispatcher`] is used; when false,
+/// `@tr(...)` falls back to the original strings.
+#[wasm_bindgen]
+pub fn init_translations(enabled: bool) -> String {
+    take(unsafe {
+        crate::slint_dart_init_translations(
+            call_translate_dispatcher,
+            free_dispatcher_result,
+            std::ptr::null_mut(),
+            enabled,
+        )
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Embedded rendering
 // ---------------------------------------------------------------------------

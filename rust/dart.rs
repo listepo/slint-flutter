@@ -304,7 +304,8 @@ fn dart_type(ty: &Type) -> io::Result<String> {
         | Type::Rem
         | Type::Percent
         | Type::UnitProduct(_) => "double".into(),
-        Type::String | Type::Color | Type::Brush | Type::Image => "String".into(),
+        Type::String | Type::Color | Type::Brush => "String".into(),
+        Type::Image => "slint.SlintImage".into(),
         Type::Bool => "bool".into(),
         Type::Array(element) => format!("List<{}>", dart_type(element)?),
         Type::Struct(structure) => match &structure.name {
@@ -328,9 +329,10 @@ fn from_slint(ty: &Type, expression: &str) -> io::Result<String> {
         | Type::Rem
         | Type::Percent
         | Type::UnitProduct(_) => format!("({expression} as num).toDouble()"),
-        Type::String | Type::Color | Type::Brush | Type::Image => {
+        Type::String | Type::Color | Type::Brush => {
             format!("{expression} as String")
         }
+        Type::Image => format!("slint.SlintImage.fromSlint({expression})"),
         Type::Bool => format!("{expression} as bool"),
         Type::Array(element) => format!(
             "({expression} as List<Object?>).map((value) => {}).toList()",
@@ -932,8 +934,9 @@ mod tests {
     }
 
     #[test]
-    fn dart_strings_escape_interpolation() {
-        assert_eq!(dart_string(r"lib/foo$bar.slint"), r#""lib/foo\$bar.slint""#);
+    fn dart_image_properties_use_slint_image() {
+        assert_eq!(dart_type(&Type::Image).unwrap(), "slint.SlintImage");
+        assert_eq!(from_slint(&Type::Image, "value").unwrap(), "slint.SlintImage.fromSlint(value)");
     }
 
     #[test]

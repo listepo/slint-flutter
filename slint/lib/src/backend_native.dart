@@ -22,6 +22,7 @@ class NativeBackend implements SlintBackend {
 
   static CallbackDispatch? _onCallback;
   static TimerDispatch? _onTimer;
+  static TranslateDispatch? _onTranslate;
 
   Pointer<Uint8> _frame = nullptr;
   int _framePixels = 0;
@@ -30,9 +31,14 @@ class NativeBackend implements SlintBackend {
   Future<void> initialize({String? scriptUrl}) async {}
 
   @override
-  void installDispatchers(CallbackDispatch onCallback, TimerDispatch onTimer) {
+  void installDispatchers(
+    CallbackDispatch onCallback,
+    TimerDispatch onTimer,
+    TranslateDispatch onTranslate,
+  ) {
     _onCallback = onCallback;
     _onTimer = onTimer;
+    _onTranslate = onTranslate;
   }
 
   @override
@@ -59,6 +65,15 @@ class NativeBackend implements SlintBackend {
   static void _dispatchTimer(Pointer<Void> userData) =>
       _onTimer?.call(userData.address);
 
+  static Pointer<Char> _dispatchTranslate(
+    Pointer<Void> userData,
+    Pointer<Char> requestJson,
+  ) {
+    final result = _onTranslate?.call(requestJson.cast<Utf8>().toDartString());
+    if (result == null) return nullptr;
+    return result.toNativeUtf8().cast<Char>();
+  }
+
   // The signatures come from the generated bindings, so a change on the Rust
   // side stops compiling here instead of corrupting the stack at runtime.
   static final _callbackTrampoline =
@@ -73,6 +88,10 @@ class NativeBackend implements SlintBackend {
 
   static final _timerTrampoline =
       NativeCallable<Void Function(Pointer<Void>)>.isolateLocal(_dispatchTimer)
+        ..keepIsolateAlive = false;
+
+  static final _translateTrampoline =
+      NativeCallable<DartCallbackFunction>.isolateLocal(_dispatchTranslate)
         ..keepIsolateAlive = false;
 
   // Compiler ---------------------------------------------------------------
@@ -244,6 +263,14 @@ class NativeBackend implements SlintBackend {
 
   @override
   void timerFree(int timer) => _ffi.timerFree(Pointer.fromAddress(timer));
+
+  @override
+  void initTranslations(bool enabled) => takeEnvelope(_ffi.initTranslations(
+        _translateTrampoline.nativeFunction,
+        _freeTrampoline.nativeFunction,
+        nullptr,
+        enabled,
+      ));
 
   // Embedded rendering -----------------------------------------------------
 

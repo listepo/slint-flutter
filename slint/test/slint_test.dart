@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:slint/slint.dart';
 import 'package:test/test.dart';
@@ -223,6 +224,79 @@ void main() {
       expect(() => throwaway['value'], throwsA(isA<StateError>()));
       // Disposing twice is harmless.
       throwaway.dispose();
+    });
+  });
+
+  group('images', () {
+    late ComponentInstance ui;
+
+    setUp(() => ui = loadSource('''
+export component App {
+    in-out property <image> icon;
+}
+'''));
+    tearDown(() => ui.dispose());
+
+    test('an unset image is null', () {
+      expect(ui['icon'], isNull);
+    });
+
+    test('RGBA pixels round-trip', () {
+      final pixels = Uint8List.fromList([
+        255, 0, 0, 255, 0, 255, 0, 255, //
+        0, 0, 255, 255, 255, 255, 0, 255,
+      ]);
+      ui['icon'] = SlintImage.fromRgba(2, 2, pixels);
+
+      final got = SlintImage.fromSlint(ui['icon']);
+      expect(got.width, 2);
+      expect(got.height, 2);
+      expect(got.rgba, pixels);
+    });
+
+    test('SVG source loads', () {
+      ui['icon'] = SlintImage.fromSvg(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2">'
+        '<rect width="2" height="2" fill="#00ff00"/>'
+        '</svg>',
+      );
+
+      final got = SlintImage.fromSlint(ui['icon']);
+      expect(got.width, 2);
+      expect(got.height, 2);
+    });
+
+    test('a missing path throws', () {
+      expect(
+        () => ui['icon'] = SlintImage.fromPath('/definitely/not/here.png'),
+        throwsA(isA<SlintException>()),
+      );
+      expect(ui['icon'], isNull);
+    });
+  });
+
+  group('translations', () {
+    late ComponentInstance ui;
+
+    setUp(() => ui = loadSource('''
+export component App {
+    in-out property <string> greeting: @tr("Hello");
+}
+'''));
+    tearDown(() {
+      initTranslations(null);
+      ui.dispose();
+    });
+
+    test('a translator replaces @tr strings', () {
+      expect(ui['greeting'], 'Hello');
+
+      initTranslations(
+          (string, {context, plural, n = 0}) => string.toUpperCase());
+      expect(ui['greeting'], 'HELLO');
+
+      initTranslations(null);
+      expect(ui['greeting'], 'Hello');
     });
   });
 }

@@ -61,6 +61,7 @@ functions:
     'slint_dart_quit_event_loop': 'quitEventLoop'
     'slint_dart_timer_start': 'timerStart'
     'slint_dart_timer_free': 'timerFree'
+    'slint_dart_init_translations': 'initTranslations'
     'slint_dart_embedded_init': 'embeddedInit'
     'slint_dart_embedded_resize': 'embeddedResize'
     'slint_dart_embedded_render': 'embeddedRender'

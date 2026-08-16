@@ -195,7 +195,7 @@ That last step is the one a packaged application takes.
 
 ### The `dart:ffi` bindings are generated
 
-The 37 entry points are not declared by hand on both sides. cbindgen writes a
+The 38 entry points are not declared by hand on both sides. cbindgen writes a
 C header from `rust/`, and ffigen turns that into
 [`slint/lib/src/ffi.g.dart`](./slint/lib/src/ffi.g.dart):
 
@@ -396,6 +396,7 @@ data:
 | `[T]` (a model) | `List` |
 | a struct | `Map<String, Object?>` |
 | `color`, `brush` | `String`, CSS-style: `'#00c1e2'`, `'#00c1e2ff'` |
+| `image` | `SlintImage` |
 | an enum | `String`, the variant name |
 | a callback with no return | the handler returns `null` |
 
@@ -409,6 +410,18 @@ app['todo-model'] = items;
 ```
 
 Globals work the same way through `app.global('PrinterQueue')`.
+
+Pass an image in with `SlintImage.fromPath`, `fromEncoded`, `fromSvg`, or
+`fromRgba`. `@image-url` inside `.slint` still works. The untyped
+`getProperty` returns `null`, a path string, or a map; generated getters wrap
+that in `SlintImage`.
+
+`initTranslations` installs a Dart function for `@tr(...)` strings. Create a
+`SlintSurface` or a component first so the Slint platform exists:
+
+```dart
+initTranslations((string, {context, plural, n = 0}) => catalog[string] ?? string);
+```
 
 ## Testing
 
@@ -459,8 +472,6 @@ every command above is available as `fvm dart …` and `fvm flutter …`. Run
 - One `SlintSurface` per isolate: the software renderer owns a single surface.
 - Everything must be used from the main isolate, which is where the Slint
   platform lives. This matches the Python and Node.js bindings.
-- Images and translations are not exposed yet. `@image-url` inside `.slint`
-  works; passing an image in from Dart does not.
 - Generated wrappers load the original `.slint` source at runtime.
   Packaged Flutter apps should bundle that file as a Flutter asset and call
   `loadSource` with the preloaded text.
