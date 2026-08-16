@@ -1,8 +1,8 @@
 name: slint_flutter
 description: A Flutter widget that renders a Slint user interface inside the widget tree.
 version: 1.18.0
-homepage: https://slint.dev
-repository: https://github.com/slint-ui/slint
+homepage: https://github.com/listepo/slint-flutter
+repository: https://github.com/listepo/slint-flutter
 publish_to: none
 
 environment:

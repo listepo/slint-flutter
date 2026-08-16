@@ -1,8 +1,8 @@
 name: slint_generator
 description: The build_runner builder that generates a typed Dart API for each .slint file.
 version: 1.18.0
-homepage: https://slint.dev
-repository: https://github.com/slint-ui/slint
+homepage: https://github.com/listepo/slint-flutter
+repository: https://github.com/listepo/slint-flutter
 publish_to: none
 
 environment:
