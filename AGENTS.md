@@ -25,13 +25,48 @@ write another language, or make an application rebuild the runtime for its own
 UI, it is the wrong change — see the Limitations section of the README for why
 a compiler-free runtime is not available instead.
 
+## Two build systems, on purpose
+
+| Path | Drives | For |
+| --- | --- | --- |
+| `slint/hook/build.dart` → `native_toolchain_rust` → cargo | one library, for the host or the connected device | every `dart run`, `dart test`, `flutter build`/`run` |
+| Bazel → `tools/cargo.bzl` → cargo | eight targets in parallel | release artifacts: xcframework, AAR |
+
+Cargo compiles the Rust in both. Bazel is an orchestrator, not a Rust build
+system: `crate_universe` over 338 crates including `skia-bindings` — which
+downloads and builds Skia in its own build script — would cost far more than
+the fan-out is worth. The cargo rules are therefore tagged `local`,
+`no-sandbox` and `requires-network`, and they share one cargo target directory
+so the slices reuse each other's dependency compilations.
+
+`bazel_worker` fits the codegen rule, not the build hook: a persistent worker
+is a program *Bazel* calls, whereas a build hook is called by the Dart tool.
+`//examples/todo/flutter:todo_ui` shows the rule; the worker itself is
+`slint_generator/bin/codegen_worker.dart`.
+
+There is deliberately no build hook for the generator. Hooks fire for an
+application's *build*, not for `dart run build_runner`, so a generator hook
+would run when the generator is useless and stay silent when it is needed —
+measured, not assumed. `package:slint/compiler.dart` builds it on demand
+instead, and `//native:slint_dart_generate` builds it under Bazel.
+
 ## Prerequisites
 
 The whole toolchain is pinned with [mise](https://mise.jdx.dev) in `.mise.toml`:
 the Rust toolchain (`rust`), the Dart SDK (`dart`), the Flutter SDK
-(`flutter`), and [Bazel](https://bazel.build) (`bazel`). Run `mise install` once
-to fetch the pinned versions; with the mise shims on `PATH`, every command
-below is available as plain `dart`, `flutter`, `cargo`, `rustc`, and `bazel`.
+(`flutter`), [Bazel](https://bazel.build) (`bazel`), and
+[buildifier](https://github.com/bazelbuild/buildtools) (`buildifier`) for
+Starlark/Bazel files. Run `mise install` once to fetch the pinned versions;
+with the mise shims on `PATH`, every command below is available as plain
+`dart`, `flutter`, `cargo`, `rustc`, `bazel`, and `buildifier`.
+
+Dart and Flutter packages form a [pub workspace](https://dart.dev/tools/pub/workspaces)
+managed with [Melos](https://melos.invertase.dev). Configuration is in the root
+[`pubspec.yaml`](../pubspec.yaml) (`melos` key). Melos is pinned there, not in
+mise — run `flutter pub get` at the repo root, then `flutter pub run melos bootstrap` to
+link packages. Common commands: `flutter pub run melos run analyze`, `flutter pub run melos run
+test`, `flutter pub run melos run test:native` (after building `libslint_dart`), and
+`flutter pub run melos run codegen`.
 
 `cbindgen` (for regenerating the FFI bindings) is a Cargo binary, so install it
 with `cargo install cbindgen` rather than mise.
@@ -44,7 +79,7 @@ and its sources are in `native/rust/`.
 ```sh
 cd native
 cargo build --release -p slint-dart      # the native library the bindings load
-cd ../slint && dart pub get
+flutter pub get                         # at the repo root, links the workspace
 ```
 
 The `cdylib` is named `libslint_dart` (`libslint_dart.dylib` on macOS,
@@ -73,6 +108,15 @@ comment in `native/Cargo.toml` for why the published crate cannot provide one.
 ```sh
 cd native
 cargo build -p slint-dart --no-default-features --features renderer-software
+flutter pub run melos run test:native   # slint + slint_flutter
+flutter pub run melos run test          # slint_generator (no native library)
+```
+
+Per-package equivalents (when not using Melos):
+
+```sh
+cd native
+cargo build -p slint-dart --no-default-features --features renderer-software
 cd ../slint
 SLINT_DART_LIBRARY="$PWD/../native/target/debug/libslint_dart.dylib" dart test
 cd ../slint_flutter
@@ -90,6 +134,20 @@ cd slint_generator && dart test && dart analyze
 library — that is why the commands above pin `SLINT_DART_LIBRARY` to the debug
 build they just made.
 
+Bazel and Starlark tooling:
+
+```sh
+bazel test //tools/tests:tooling
+buildifier -mode=check $(find . \( -name '*.bzl' -o -name 'BUILD.bazel' -o -name 'MODULE.bazel' \) -not -path './bazel-*/*')
+```
+
+`//tools/tests:tooling` runs buildifier, Starlark unit tests for the packaging
+helpers, smoke builds for `//tools:codegen_worker` and
+`//slint_generator:worker_srcs`, and integration tests that assemble a fake AAR
+(everywhere) and xcframework (macOS only). The cargo-backed `//native:...`
+targets are intentionally not in this suite — they need the network and a full
+Rust build.
+
 ## The FFI bindings are generated
 
 The C entry points are not declared by hand on both sides. cbindgen writes a C
@@ -97,17 +155,17 @@ header from `native/rust/`, and ffigen turns that into `slint/lib/src/ffi.g.dart
 
 ```sh
 cargo install cbindgen        # once
-./scripts/generate_slint_dart_bindings.bash
+bazel run //scripts:generate_bindings
 ```
 
 `ffi.g.dart` is committed, so building the package needs neither tool. Run the
-script with `--check` in CI: it regenerates into a temporary copy and fails if
+target with `-- --check` in CI: it regenerates into a temporary copy and fails if
 the result differs, which stops a changed Rust signature from silently
 disagreeing with Dart.
 
 If you change a signature in `native/rust/`, or add or remove an entry point, you must
 regenerate `ffi.g.dart` (and `native/target/slint_dart.h`) with
-`./scripts/generate_slint_dart_bindings.bash` and commit the result. The
+`bazel run //scripts:generate_bindings` and commit the result. The
 `ffigen.yaml` rename map and the hand-written conversions in `ffi.dart` are
 documented in the README.
 

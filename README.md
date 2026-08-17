@@ -199,11 +199,11 @@ C header from `native/rust/`, and ffigen turns that into
 
 ```sh
 cargo install cbindgen        # once
-./scripts/generate_slint_dart_bindings.bash
+bazel run //scripts:generate_bindings
 ```
 
 `ffi.g.dart` is committed, so building the package needs neither tool. Run the
-script with `--check` in CI: it regenerates into a temporary copy and fails if
+target with `-- --check` in CI: it regenerates into a temporary copy and fails if
 the result differs, which is what stops a changed Rust signature from silently
 disagreeing with Dart.
 
@@ -246,30 +246,40 @@ hooks:
       cargo_profile: debug
 ```
 
-The hook caches its result and re-runs cargo only when the Rust sources, the
-crate manifest, or the workspace lockfile change.
+The hook is [`native_toolchain_rust`](https://pub.dev/packages/native_toolchain_rust),
+which owns the target triples, the Android NDK toolchain, and the rustup
+version pinned in [`native/rust-toolchain.toml`](./native/rust-toolchain.toml).
+It re-runs cargo only when cargo's own depfile says an input changed.
 
-### iOS embeds an xcframework
+### Release artifacts come from Bazel
 
-The build hook doesn't cross-compile, so on iOS it builds nothing and leaves
-the library to an xcframework you build once:
+Bazel drives the multi-target builds: one cargo invocation per target triple,
+fanned out in parallel and cached per artifact.
 
 ```sh
-./scripts/build_slint_dart_xcframework.bash
+bazel build //native:release        # xcframework + AAR + generator
+bazel build //native:xcframework    # Apple only
+bazel build //native:aar            # Android only
 ```
 
-That produces `native/target/SlintDart.xcframework` holding `slint_dart.framework`
-for the device (`arm64`), the simulator (`arm64` and `x86_64`) and macOS
-(`arm64` and `x86_64`). Add it to the Runner target's *Frameworks, Libraries,
-and Embedded Content* with **Embed & Sign**. These are ordinary dynamic
-frameworks — the same shape the hook already bundles on macOS — so
+`//native:xcframework` produces `SlintDart.xcframework.zip` with
+`slint_dart.framework` for the device (`arm64`), the simulator (`arm64` and
+`x86_64`) and macOS (`arm64` and `x86_64`). Add it to the Runner target's
+*Frameworks, Libraries, and Embedded Content* with **Embed & Sign**. These are
+ordinary dynamic frameworks — the same shape the hook bundles on macOS — so
 `package:slint` opens them from the app bundle with no special case.
 
-The slices carry only the software renderer, since the Dart binding always
-draws through the embedded surface on Apple platforms. `SLINT_DART_FEATURES`,
-`SLINT_DART_PROFILE`, `SLINT_DART_XCFRAMEWORK` and the usual
-`IPHONEOS_DEPLOYMENT_TARGET` / `MACOSX_DEPLOYMENT_TARGET` override the feature
-set, the cargo profile, the output path and the minimum OS versions.
+`//native:aar` produces `slint-dart.aar` carrying `libslint_dart.so` for
+`armeabi-v7a`, `arm64-v8a` and `x86_64` under `jni/`, which Gradle unpacks into
+the application's `jniLibs`.
+
+Both carry only the software renderer, since the binding always draws through
+the embedded surface on mobile.
+
+Cargo still compiles the Rust. The crate graph is 338 crates deep and includes
+`skia-bindings`, which downloads and builds Skia from its own build script, so
+the rules that call cargo are tagged `local`, `no-sandbox` and
+`requires-network` rather than being ported to rules_rust.
 
 ### The web loads a WebAssembly module
 
@@ -283,7 +293,7 @@ software renderer — is the code every other platform runs.
 Build the module into the application's `web/` directory:
 
 ```sh
-./scripts/build_slint_dart_wasm.bash path/to/app/web
+bazel run //scripts:build_wasm -- path/to/app/web
 ```
 
 That writes `slint_dart.js` and `slint_dart_bg.wasm` (about 15 MB, roughly
@@ -416,12 +426,28 @@ native event loop.
 ```sh
 cd native
 cargo build -p slint-dart --no-default-features --features renderer-software
+flutter pub get   # at the repo root, once
+flutter pub run melos run test:native     # slint + slint_flutter
+flutter pub run melos run test            # slint_generator (no native library)
+```
+
+Or run each package directly:
+
+```sh
+cd native
+cargo build -p slint-dart --no-default-features --features renderer-software
 cd ../slint
 SLINT_DART_LIBRARY="$PWD/../native/target/debug/libslint_dart.dylib" dart test
 cd ../slint_flutter
 SLINT_DART_LIBRARY="$PWD/../native/target/debug/libslint_dart.dylib" flutter test
 cd ../slint_generator
 dart test    # a fake generator, so no native library is needed
+```
+
+Bazel Starlark tooling (buildifier, packaging rules, codegen smoke builds):
+
+```sh
+bazel test //tools/tests:tooling
 ```
 
 Pinning `SLINT_DART_LIBRARY` is what keeps the suites on that debug build:
@@ -437,11 +463,40 @@ embeds a font directory that only exists inside the Slint repository.
 
 The whole toolchain is pinned with [mise](https://mise.jdx.dev) in `.mise.toml`:
 the Rust toolchain (`rust`), the Dart SDK (`dart`), the Flutter SDK
-(`flutter`), and [Bazel](https://bazel.build) (`bazel`). Run `mise install` once
-to fetch the pinned versions; with the mise shims on `PATH`, every command above
-is available as plain `dart`, `flutter`, `cargo`, `rustc`, and `bazel`.
+(`flutter`), [Bazel](https://bazel.build) (`bazel`), and
+[buildifier](https://github.com/bazelbuild/buildtools) (`buildifier`) for
+Starlark/Bazel files. Run `mise install` once to fetch the pinned versions;
+with the mise shims on `PATH`, every command above is available as plain
+`dart`, `flutter`, `cargo`, `rustc`, `bazel`, and `buildifier`.
 `cbindgen` (for regenerating the FFI bindings) is a Cargo binary, installed with
 `cargo install cbindgen`.
+
+### Dart workspace (Melos)
+
+Dart and Flutter packages are managed as a [pub workspace](https://dart.dev/tools/pub/workspaces)
+with [Melos](https://melos.invertase.dev). Configuration lives in the root
+[`pubspec.yaml`](./pubspec.yaml) under the `melos` key (Melos 7+ no longer uses
+a separate `melos.yaml`). Melos is pinned there as a dev dependency — it is not
+in the mise registry, so invoke it with `flutter pub run melos` from the repo root (or
+`mise run melos --`).
+
+```sh
+flutter pub get              # once, installs the pinned melos version
+flutter pub run melos bootstrap  # link workspace packages and fetch dependencies
+flutter pub run melos run analyze
+flutter pub run melos run test              # pure-Dart packages (slint_generator, …)
+flutter pub run melos run test:native       # slint + slint_flutter (needs debug libslint_dart)
+flutter pub run melos run test:flutter      # Flutter example tests
+flutter pub run melos run format
+flutter pub run melos run codegen           # build_runner in apps that depend on slint_generator
+```
+
+Core packages (`slint`, `slint_flutter`, `slint_generator`,
+`examples/test_support`) and every Flutter example under `examples/*/flutter`
+are workspace members. Examples stay `publish_to: none`; when the binding packages
+are ready for pub.dev, remove `publish_to: none` from those three packages and
+use `flutter pub run melos version` / `flutter pub run melos publish` (Melos skips packages
+that still declare `publish_to: none`).
 
 ## Examples
 

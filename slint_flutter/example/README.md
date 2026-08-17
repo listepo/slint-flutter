@@ -50,5 +50,5 @@ Use `libslint_dart.so` on Linux and `slint_dart.dll` on Windows.
 Looking up generated `slint_aot_*` exports from Dart web is not wired yet, so
 the Chrome / wasm path does not yet instantiate `CounterWindow.load()`. When that
 lands, the same generate step plus
-`../../scripts/build_slint_dart_wasm.bash web` will apply; `initSlint()` in
+`bazel run //scripts:build_wasm -- web` will apply; `initSlint()` in
 [`lib/main.dart`](lib/main.dart) already awaits the wasm module on the web.

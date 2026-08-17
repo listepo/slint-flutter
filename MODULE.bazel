@@ -1,0 +1,19 @@
+# Bazel orchestrates the multi-target native builds; cargo still compiles the
+# Rust. That split is deliberate: the crate graph is 338 crates deep and
+# includes `skia-bindings`, which downloads and builds Skia from its own
+# build.rs, so putting it under rules_rust/crate_universe would buy hermeticity
+# at the cost of a build that barely works. What Bazel is here for is the fan
+# out — five Apple slices and three Android ABIs, built in parallel, cached per
+# artifact — plus the codegen worker.
+#
+# Because cargo needs the network and the host toolchain, the rules that invoke
+# it are tagged `local`, `no-sandbox` and `requires-network`.
+module(
+    name = "slint_dart",
+    version = "1.18.0",
+)
+
+bazel_dep(name = "bazel_skylib", version = "1.8.2")
+bazel_dep(name = "buildozer", version = "8.5.1")
+bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "rules_shell", version = "0.6.1")

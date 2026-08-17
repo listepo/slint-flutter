@@ -120,8 +120,7 @@ String? _findInCargoTarget() {
     for (var dir = Directory(root);; dir = dir.parent) {
       for (final targetDir in _cargoTargetDirs(dir.path)) {
         for (final profile in const ['release', 'debug']) {
-          final candidate =
-              File(p.join(targetDir, profile, generatorFileName));
+          final candidate = File(p.join(targetDir, profile, generatorFileName));
           if (candidate.existsSync()) return candidate.path;
         }
       }

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:code_assets/code_assets.dart';
 import 'package:hooks/src/test.dart' as hooks_test;
+import 'package:native_toolchain_rust/native_toolchain_rust.dart';
 import 'package:test/test.dart';
 
 import '../hook/build.dart' as build_hook;
@@ -19,26 +20,24 @@ OS? hostOs(Abi abi) {
 
 void main() {
   test('the cargo profile defaults to release and honors the user-define', () {
-    expect(build_hook.cargoProfile(null), 'release');
-    expect(build_hook.cargoProfile('debug'), 'debug');
-    expect(build_hook.cargoProfile('release'), 'release');
+    expect(build_hook.cargoProfile(null), BuildMode.release);
+    expect(build_hook.cargoProfile('debug'), BuildMode.debug);
+    expect(build_hook.cargoProfile('release'), BuildMode.release);
     expect(
       () => build_hook.cargoProfile('fast'),
       throwsA(isA<FormatException>()),
     );
   });
 
-  test('maps Android architectures to cargo-ndk ABIs', () {
-    expect(build_hook.cargoNdkAbi(Architecture.arm), 'armeabi-v7a');
-    expect(build_hook.cargoNdkAbi(Architecture.arm64), 'arm64-v8a');
-    expect(build_hook.cargoNdkAbi(Architecture.x64), 'x86_64');
-    // 32-bit x86 and RISC-V have no slice Flutter can place in jniLibs.
-    expect(build_hook.cargoNdkAbi(Architecture.ia32), isNull);
-    expect(build_hook.cargoNdkAbi(Architecture.riscv64), isNull);
-  });
-
-  test('the Android library is a shared object', () {
-    expect(build_hook.libraryExtension(OS.android), 'so');
+  test('mobile builds the software renderer only', () {
+    // Android and iOS draw through SlintSurface, and winit/Skia/FemtoVG do not
+    // cross-compile to them anyway.
+    expect(build_hook.isEmbeddedOnly(OS.android), isTrue);
+    expect(build_hook.isEmbeddedOnly(OS.iOS), isTrue);
+    // Desktop keeps the default features, because `run()` opens a window.
+    expect(build_hook.isEmbeddedOnly(OS.macOS), isFalse);
+    expect(build_hook.isEmbeddedOnly(OS.linux), isFalse);
+    expect(build_hook.isEmbeddedOnly(OS.windows), isFalse);
   });
 
   test('leaves iOS to the xcframework: no asset, no build', () async {
@@ -60,22 +59,23 @@ void main() {
     );
   });
 
+  // A real cargo build of the default feature set — Skia included — into the
+  // throwaway target directory `testBuildHook` hands out, so nothing is cached
+  // from the repository's own `native/target`. Minutes, not seconds.
   test('builds libslint_dart and declares it as a bundled code asset',
-      () async {
+      timeout: const Timeout(Duration(minutes: 30)), () async {
     final abi = Abi.current();
     final os = hostOs(abi);
-    final hostTriple = await build_hook.hostRustTarget();
-    if (os == null || hostTriple == null) {
+    if (os == null ||
+        !File('${Platform.environment['HOME']}/.cargo/bin/rustup')
+            .existsSync()) {
       markTestSkipped(
-        'The host (${Platform.operatingSystem}/${Platform.version}) is not '
-        'supported, or the Rust toolchain is unavailable.',
+        'The host (${Platform.operatingSystem}) is not supported, or rustup '
+        'is unavailable.',
       );
       return;
     }
 
-    // The hook builds with the default `release` cargo profile, which never
-    // touches the `target/debug` library the other suites load through
-    // `SLINT_DART_LIBRARY`.
     await hooks_test.testBuildHook(
       mainMethod: build_hook.main,
       extensions: [
@@ -97,24 +97,19 @@ void main() {
         expect(asset.linkMode, isA<DynamicLoadingBundled>());
         expect(asset.file, isNotNull);
         expect(File.fromUri(asset.file!).existsSync(), isTrue);
-        expect(asset.file!.pathSegments.last,
-            '${build_hook.assetName}.${build_hook.libraryExtension(os)}');
+        expect(asset.file!.pathSegments.last, contains('slint_dart'));
 
-        // The crate manifest and sources are declared so the hook cache
-        // invalidates when they change. They sit in `native/`, next to the
-        // `slint` package at the repository root.
-        final crateRoot = input.packageRoot.resolve('../native/');
+        // The Rust sources are declared, so editing one re-runs cargo. These
+        // come from cargo's own depfile, which lists each file that went into
+        // the build — a directory dependency would not do: the hook runner
+        // hashes a directory from its child names alone.
         final dependencies = output.dependencies.map((uri) => uri.path).toSet();
-        expect(dependencies, contains(crateRoot.resolve('Cargo.toml').path));
-        // With the trailing slash: the hook runner reads a dependency without
-        // one as a file, so a bare `rust` would be "missing" and invalidate the
-        // cache on every build.
-        expect(dependencies, contains(crateRoot.resolve('rust/').path));
-        // And the sources themselves, because a directory dependency is hashed
-        // from its child names alone — without these, editing a `.rs` file
-        // would not rebuild the library.
-        expect(dependencies, contains(crateRoot.resolve('rust/lib.rs').path));
-        expect(dependencies, contains(endsWith('Cargo.lock')));
+        expect(dependencies, isNotEmpty);
+        expect(
+          dependencies.where((path) => path.endsWith('rust/lib.rs')),
+          isNotEmpty,
+          reason: 'the crate sources must be watched',
+        );
       },
     );
   });

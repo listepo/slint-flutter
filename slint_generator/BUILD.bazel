@@ -1,0 +1,17 @@
+package(default_visibility = ["//visibility:public"])
+
+# The worker script and the package resolution it needs. `dart pub get` must
+# have run here once; Bazel does not manage pub.
+filegroup(
+    name = "worker_srcs",
+    srcs = [
+        "bin/codegen_worker.dart",
+        "pubspec.yaml",
+    ] + glob(
+        [
+            ".dart_tool/package_config.json",
+            "lib/**/*.dart",
+        ],
+        allow_empty = True,
+    ),
+)

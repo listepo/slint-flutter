@@ -1,0 +1,16 @@
+load(":slint.bzl", "codegen_worker")
+
+package(default_visibility = ["//visibility:public"])
+
+# The Bazel persistent worker that drives `slint-dart-generate`. It reads the
+# Dart sources from the source tree, so it is `local` like everything else here.
+codegen_worker(name = "codegen_worker")
+
+exports_files([
+    "buildifier_test.sh",
+    "cargo.bzl",
+    "packaging.bzl",
+    "packaging_lib.bzl",
+    "packaging_test.bzl",
+    "slint.bzl",
+])

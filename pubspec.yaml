@@ -1,0 +1,130 @@
+name: slint_dart_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.5.0
+
+# Pub workspace members. Rust/native code under native/ is outside Melos.
+workspace:
+  - slint
+  - slint_flutter
+  - slint_flutter/example
+  - slint_generator
+  - examples/test_support
+  - examples/7guis/flutter
+  - examples/async-io/flutter
+  - examples/carousel/flutter
+  - examples/dial/flutter
+  - examples/fancy_demo/flutter
+  - examples/fancy-switches/flutter
+  - examples/gallery/flutter
+  - examples/imagefilter/flutter
+  - examples/iot-dashboard/flutter
+  - examples/layouts/flutter
+  - examples/memory/flutter
+  - examples/native-gestures/flutter
+  - examples/orbit-animation/flutter
+  - examples/repeater/flutter
+  - examples/slide_puzzle/flutter
+  - examples/speedometer/flutter
+  - examples/sprite-sheet/flutter
+  - examples/todo/flutter
+
+dev_dependencies:
+  melos: ^8.3.0
+
+dependency_overrides:
+  # ffigen (slint dev_dependency) pins cli_util ^0.4.2; melos needs ^0.5.0.
+  # They are both dev-only; 0.5.x is backward compatible for ffigen's usage.
+  cli_util: ^0.5.0
+
+melos:
+  repository: https://github.com/listepo/slint-flutter
+
+  categories:
+    core:
+      - slint
+      - slint_flutter
+      - slint_generator
+      - examples/test_support
+    examples:
+      - examples/**
+      - slint_flutter/example
+
+  command:
+    bootstrap:
+      runPubGetInParallel: true
+    version:
+      branch: main
+      workspaceChangelog: true
+      linkToCommits: true
+
+  scripts:
+    get:
+      description: Resolve the workspace lockfile (flutter pub get at the repo root).
+      run: flutter pub get
+
+    analyze:
+      description: Run the analyzer in every package with a lib/ directory.
+      exec:
+        command: dart analyze --fatal-infos
+        concurrency: 5
+      packageFilters:
+        dirExists: lib
+
+    test:
+      description: Run Dart tests (slint_generator and other pure-Dart packages).
+      exec:
+        command: dart test
+        concurrency: 1
+      packageFilters:
+        dirExists: test
+        flutter: false
+
+    test:flutter:
+      description: Run Flutter widget tests.
+      exec:
+        command: flutter test
+        concurrency: 1
+      packageFilters:
+        flutter: true
+        dirExists: test
+
+    test:native:slint:
+      description: Run package:slint tests against a debug native library.
+      exec:
+        command: bash -lc 'lib="$MELOS_ROOT_PATH/native/target/debug/libslint_dart"; case "$(uname -s)" in Darwin) export SLINT_DART_LIBRARY="${lib}.dylib" ;; Linux) export SLINT_DART_LIBRARY="${lib}.so" ;; MINGW*|MSYS*|CYGWIN*) export SLINT_DART_LIBRARY="${lib}.dll" ;; *) echo "Unsupported platform" >&2; exit 1 ;; esac; test -f "$SLINT_DART_LIBRARY" || { echo "Build debug libslint_dart first (see README)" >&2; exit 1; }; dart test'
+        concurrency: 1
+      packageFilters:
+        scope: slint
+
+    test:native:slint_flutter:
+      description: Run slint_flutter tests against a debug native library.
+      exec:
+        command: bash -lc 'lib="$MELOS_ROOT_PATH/native/target/debug/libslint_dart"; case "$(uname -s)" in Darwin) export SLINT_DART_LIBRARY="${lib}.dylib" ;; Linux) export SLINT_DART_LIBRARY="${lib}.so" ;; MINGW*|MSYS*|CYGWIN*) export SLINT_DART_LIBRARY="${lib}.dll" ;; *) echo "Unsupported platform" >&2; exit 1 ;; esac; test -f "$SLINT_DART_LIBRARY" || { echo "Build debug libslint_dart first (see README)" >&2; exit 1; }; flutter test'
+        concurrency: 1
+      packageFilters:
+        scope: slint_flutter
+
+    test:native:
+      description: Run slint and slint_flutter tests against a debug native library.
+      run: melos run test:native:slint && melos run test:native:slint_flutter
+
+    format:
+      description: Format Dart sources.
+      exec:
+        command: dart format .
+        concurrency: 5
+
+    format:check:
+      description: Fail if any Dart file needs formatting.
+      exec:
+        command: dart format --output=none --set-exit-if-changed .
+        concurrency: 5
+
+    codegen:
+      description: Regenerate .slint.dart wrappers with build_runner.
+      exec:
+        command: dart run build_runner build --delete-conflicting-outputs
+      packageFilters:
+        dependsOn: slint_generator

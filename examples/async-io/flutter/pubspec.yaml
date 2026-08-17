@@ -1,10 +1,11 @@
 name: async_io
+resolution: workspace
 description: Async stock ticker as a Flutter application.
 version: 1.18.0
 publish_to: none
 
 environment:
-  sdk: ^3.3.0
+  sdk: ^3.5.0
   flutter: ">=3.16.0"
 
 dependencies:

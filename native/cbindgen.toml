@@ -1,6 +1,6 @@
 # Header for the `slint-dart` C ABI, consumed by ffigen to generate
 # `slint/lib/src/ffi.g.dart`. Regenerate both with
-# `./scripts/generate_slint_dart_bindings.bash`.
+# `bazel run //scripts:generate_bindings`.
 
 language = "C"
 autogen_warning = "// Generated from rust by cbindgen. Do not edit."

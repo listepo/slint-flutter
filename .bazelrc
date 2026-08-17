@@ -1,0 +1,24 @@
+# cargo needs the network, the host toolchain and its own registry under
+# $HOME, so the rules that call it opt out of the sandbox — see the tags in
+# tools/cargo.bzl — and are handed the two variables they cannot work without.
+build --action_env=HOME
+build --action_env=PATH
+
+# Tools run in the exec configuration (the generator, the codegen worker) and
+# need the same.
+build --host_action_env=HOME
+build --host_action_env=PATH
+
+build --experimental_convenience_symlinks=ignore
+
+# Parallelism is the point of driving these from Bazel: one cargo invocation
+# per target triple, fanned out across the host's cores. Note that the cargo
+# actions still share one target directory, so they serialize on cargo's own
+# lock while compiling common dependencies and diverge once those are built.
+build --jobs=auto
+
+# Codegen runs in a persistent worker, so a build of many `.slint` files pays
+# for one Dart process rather than one per file. Deliberately *not* a global
+# `--spawn_strategy=local`: that would apply here too and silently disable the
+# worker. The cargo rules pick local execution through their own tags instead.
+build --strategy=SlintCodegen=worker

@@ -12,8 +12,10 @@ rust-version = "1.92"
 [lib]
 path = "rust/lib.rs"
 name = "slint_dart"
-# `rlib` in addition to `cdylib` so that `cargo test` can link the unit tests.
-crate-type = ["cdylib", "rlib"]
+# `cdylib` is what applications load. `staticlib` is required by
+# `native_toolchain_rust`, which the Dart build hook drives. `rlib` is what lets
+# `cargo test` link the unit tests.
+crate-type = ["cdylib", "staticlib", "rlib"]
 
 [features]
 # Keep in sync with the defaults of api/python/slint.

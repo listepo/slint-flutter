@@ -9,3 +9,11 @@ rust = "1.97.1"
 dart = "3.13.0"
 flutter = "3.47.0"
 bazel = "9.2.0"
+buildifier = "8.5.1"
+# Melos is not in the mise registry; it is pinned in the root pubspec.yaml
+# (dev_dependency). Run `flutter pub get` at the repo root, then
+# `flutter pub run melos`.
+
+[tasks.melos]
+description = "Run melos from the workspace root (pass args after --)"
+run = "flutter pub run melos"

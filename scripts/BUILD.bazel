@@ -1,0 +1,7 @@
+load(":dev.bzl", "build_wasm", "generate_bindings")
+
+package(default_visibility = ["//visibility:public"])
+
+generate_bindings(name = "generate_bindings")
+
+build_wasm(name = "build_wasm")

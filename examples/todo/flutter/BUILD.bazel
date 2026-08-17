@@ -1,0 +1,10 @@
+load("//tools:slint.bzl", "slint_dart_library")
+
+# The todo UI, generated through the Bazel codegen worker. This is the same
+# wrapper `build_runner` produces; the rule exists so a Bazel build can
+# generate many `.slint` files without paying process startup for each.
+slint_dart_library(
+    name = "todo_ui",
+    srcs = ["lib/ui/todo.slint"],
+    visibility = ["//visibility:public"],
+)

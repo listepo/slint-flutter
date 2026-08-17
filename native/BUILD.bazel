@@ -1,0 +1,127 @@
+load("//tools:cargo.bzl", "cargo_binary", "cargo_library")
+load("//tools:packaging.bzl", "android_aar", "apple_xcframework")
+
+package(default_visibility = ["//visibility:public"])
+
+VERSION = "1.18.0"
+
+# Everything cargo reads. Listing the sources (not just the directory) is what
+# lets Bazel skip a slice whose inputs did not change.
+filegroup(
+    name = "crate_srcs",
+    srcs = glob(
+        [
+            "rust/**/*.rs",
+            "codegen/src/**/*.rs",
+        ],
+        allow_empty = False,
+    ) + [
+        "Cargo.lock",
+        "Cargo.toml",
+        "codegen/Cargo.toml",
+        "rust-toolchain.toml",
+    ],
+)
+
+exports_files([
+    "cbindgen.toml",
+    "Cargo.toml",
+])
+
+# Apple and Android draw through the embedded SlintSurface, so only the
+# software renderer is built: winit, Skia and FemtoVG are dead weight there and
+# do not cross-compile to these targets anyway.
+EMBEDDED_FEATURES = ["renderer-software"]
+
+APPLE_SLICES = {
+    "macos_arm64": "aarch64-apple-darwin",
+    "macos_x64": "x86_64-apple-darwin",
+    "ios_arm64": "aarch64-apple-ios",
+    "ios_sim_arm64": "aarch64-apple-ios-sim",
+    "ios_sim_x64": "x86_64-apple-ios",
+}
+
+ANDROID_ABIS = {
+    "android_arm": "armv7-linux-androideabi",
+    "android_arm64": "aarch64-linux-android",
+    "android_x64": "x86_64-linux-android",
+}
+
+# One cargo action per triple. `bazel build //native:xcframework //native:aar`
+# runs all eight concurrently, bounded by --jobs.
+[
+    cargo_library(
+        name = name,
+        srcs = [":crate_srcs"],
+        crate_features = EMBEDDED_FEATURES,
+        crate_name = "slint_dart",
+        default_features = False,
+        extension = "dylib",
+        manifest = "Cargo.toml",
+        package = "slint-dart",
+        target_triple = triple,
+    )
+    for name, triple in APPLE_SLICES.items()
+]
+
+[
+    cargo_library(
+        name = name,
+        srcs = [":crate_srcs"],
+        crate_features = EMBEDDED_FEATURES,
+        crate_name = "slint_dart",
+        default_features = False,
+        extension = "so",
+        manifest = "Cargo.toml",
+        package = "slint-dart",
+        target_triple = triple,
+    )
+    for name, triple in ANDROID_ABIS.items()
+]
+
+apple_xcframework(
+    name = "xcframework",
+    out = "SlintDart.xcframework.zip",
+    slices = {
+        "macos": [
+            ":macos_arm64",
+            ":macos_x64",
+        ],
+        "ios": [":ios_arm64"],
+        "ios-simulator": [
+            ":ios_sim_arm64",
+            ":ios_sim_x64",
+        ],
+    },
+    version = VERSION,
+)
+
+android_aar(
+    name = "aar",
+    out = "slint-dart.aar",
+    libs = {
+        "armeabi-v7a": ":android_arm",
+        "arm64-v8a": ":android_arm64",
+        "x86_64": ":android_x64",
+    },
+    version = VERSION,
+)
+
+# The `.slint` → Dart generator, for the codegen rule and the worker.
+cargo_binary(
+    name = "slint_dart_generate",
+    srcs = [":crate_srcs"],
+    binary_name = "slint-dart-generate",
+    manifest = "codegen/Cargo.toml",
+    package = "slint-dart-codegen",
+)
+
+# Everything a release needs, built in one parallel invocation.
+filegroup(
+    name = "release",
+    srcs = [
+        ":aar",
+        ":slint_dart_generate",
+        ":xcframework",
+    ],
+)

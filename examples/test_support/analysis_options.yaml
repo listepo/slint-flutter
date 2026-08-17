@@ -4,3 +4,10 @@ analyzer:
   exclude:
     - lib/ui/*.slint.dart
     - lib/ui/**/*.slint.dart
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**

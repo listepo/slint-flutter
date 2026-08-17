@@ -1,0 +1,28 @@
+# The Rust toolchain for the native crates.
+#
+# `native_toolchain_rust` (the Dart build hook) reads this file: it refuses a
+# floating channel, so the version is exact, and it refuses to build a target
+# that is not listed here. Keep `channel` in step with `rust` in `.mise.toml`.
+[toolchain]
+channel = "1.97.1"
+profile = "minimal"
+
+targets = [
+  # Android, through the NDK.
+  "armv7-linux-androideabi",
+  "aarch64-linux-android",
+  "x86_64-linux-android",
+
+  # Apple: device, simulator, and desktop.
+  "aarch64-apple-ios",
+  "aarch64-apple-ios-sim",
+  "x86_64-apple-ios",
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+
+  # Linux and Windows desktop.
+  "aarch64-unknown-linux-gnu",
+  "x86_64-unknown-linux-gnu",
+  "aarch64-pc-windows-msvc",
+  "x86_64-pc-windows-msvc",
+]

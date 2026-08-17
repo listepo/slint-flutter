@@ -3,6 +3,7 @@
 
 # JetBrains IDEs
 .idea/
+*.iml
 
 # Rust
 target/
@@ -11,3 +12,4 @@ target/
 .dart_tool/
 build/
 *.slint.dart
+bazel-*

@@ -1,7 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:slint/slint.dart' show SlintComponent;
 import 'package:slint_flutter/slint_flutter.dart';
 
 /// The route builder [WidgetsApp] needs to turn `home` into a page route.
