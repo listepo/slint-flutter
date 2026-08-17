@@ -1,10 +1,13 @@
-//! Dart wrapper generator.
+//! Dart wrapper generator: the only thing this crate emits.
 //!
-//! This is the `.slint` → `.slint.dart` code generator that `slint_generator`
-//! drives through [`crate::slint_dart_generate`]. It lives here rather than in
-//! `i-slint-compiler` next to the C++, Rust and Python generators, so that the
-//! binding builds against a released Slint. Everything it needs from the
-//! compiler — the LLR, the type system, the document — is public API.
+//! Its siblings for C++, Rust and Python live inside `i-slint-compiler`; this
+//! one lives here so the binding builds against a released Slint. Everything it
+//! needs from the compiler — the LLR, the type system, the document — is public
+//! API.
+//!
+//! The wrapper it writes is self-contained Dart: the typed API plus the
+//! compiled module [`crate::bundle`] produced. No Rust, no C, and nothing that
+//! has to be compiled into the runtime library.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Write as _;

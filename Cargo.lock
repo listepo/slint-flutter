@@ -4690,14 +4690,26 @@ dependencies = [
  "i-slint-compiler",
  "i-slint-core",
  "i-slint-renderer-software",
- "itertools 0.15.0",
  "js-sys",
- "pathdiff",
  "serde_json",
+ "slint-dart-codegen",
  "slint-interpreter",
  "spin_on",
  "wasm-bindgen",
  "web-time",
+]
+
+[[package]]
+name = "slint-dart-codegen"
+version = "1.18.0"
+dependencies = [
+ "base64",
+ "flate2",
+ "i-slint-compiler",
+ "itertools 0.15.0",
+ "pathdiff",
+ "serde_json",
+ "spin_on",
 ]
 
 [[package]]

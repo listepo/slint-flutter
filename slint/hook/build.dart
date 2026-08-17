@@ -302,6 +302,19 @@ void main(List<String> arguments) async {
   });
 }
 
+/// Every `.rs` file under `rust/`, so that editing one re-runs cargo. Missing
+/// or unreadable directories yield nothing: the hook has already built at this
+/// point, so a dependency it cannot enumerate is not worth failing over.
+Iterable<Uri> rustSources(Uri crateRoot) {
+  final directory = Directory.fromUri(crateRoot.resolve('rust/'));
+  if (!directory.existsSync()) return const [];
+  return directory
+      .listSync(recursive: true, followLinks: false)
+      .whereType<File>()
+      .where((file) => file.path.endsWith('.rs'))
+      .map((file) => file.uri);
+}
+
 /// Copy [library] into the hook's output directory and register it as a
 /// bundled code asset, alongside the workspace files that influence the build.
 Future<void> _emitAsset(
@@ -317,9 +330,18 @@ Future<void> _emitAsset(
 
   // Declare everything that influences the build, so the hook cache
   // invalidates when the Rust sources or the workspace change.
+  //
+  // Both halves are needed. A directory dependency is hashed from its child
+  // names alone, which catches a file being added or removed but not one being
+  // edited, so every `.rs` file is declared too — those are hashed by content.
+  // The trailing slash on `rust/` is load-bearing: the hook runner decides
+  // directory-versus-file from the path string, and a directory declared
+  // without one is looked up as a file, found missing, and reported as
+  // "modified just now" on every single build.
   output.dependencies
     ..add(crateRoot.resolve('Cargo.toml'))
-    ..add(crateRoot.resolve('rust'));
+    ..add(crateRoot.resolve('rust/'))
+    ..addAll(rustSources(crateRoot));
   final root = workspaceRoot(crateRoot);
   if (root != null) {
     output.dependencies

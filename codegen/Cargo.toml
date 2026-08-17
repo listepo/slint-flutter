@@ -1,0 +1,30 @@
+[package]
+name = "slint-dart-codegen"
+version = "1.18.0"
+authors = ["Slint Developers <info@slint.dev>"]
+edition = "2024"
+license = "MIT"
+description = "Generate-time `.slint` → Dart compiler. Not linked into applications."
+repository = "https://github.com/listepo/slint-flutter"
+publish = false
+rust-version = "1.92"
+
+[lib]
+path = "src/lib.rs"
+
+# What `package:slint_generator` runs. It writes one `.slint.dart` and nothing
+# else: no Rust, no C, no artifact the application has to compile.
+[[bin]]
+name = "slint-dart-generate"
+path = "src/main.rs"
+
+[dependencies]
+base64 = "0.22"
+flate2 = "1"
+# Only the front end and its diagnostics: no `rust`, `cpp` or `python` feature,
+# because this crate never asks the compiler to emit code in those languages.
+i-slint-compiler = { version = "1.17.1", default-features = false, features = ["display-diagnostics"] }
+itertools = "0.15"
+pathdiff = "0.2.1"
+serde_json = "1.0.151"
+spin_on = "0.1.1"

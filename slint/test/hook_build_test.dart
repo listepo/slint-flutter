@@ -106,7 +106,14 @@ void main() {
         final crateRoot = input.packageRoot.resolve('../');
         final dependencies = output.dependencies.map((uri) => uri.path).toSet();
         expect(dependencies, contains(crateRoot.resolve('Cargo.toml').path));
-        expect(dependencies, contains(crateRoot.resolve('rust').path));
+        // With the trailing slash: the hook runner reads a dependency without
+        // one as a file, so a bare `rust` would be "missing" and invalidate the
+        // cache on every build.
+        expect(dependencies, contains(crateRoot.resolve('rust/').path));
+        // And the sources themselves, because a directory dependency is hashed
+        // from its child names alone — without these, editing a `.rs` file
+        // would not rebuild the library.
+        expect(dependencies, contains(crateRoot.resolve('rust/lib.rs').path));
         expect(dependencies, contains(endsWith('Cargo.lock')));
       },
     );

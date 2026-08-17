@@ -44,19 +44,15 @@ dev_dependencies:
     path: path/to/slint-dart/slint_generator
 ```
 
-Build `libslint_dart` before invoking the generator.
-When the application is outside this repository, set `SLINT_DART_LIBRARY` to
-the built library's absolute path:
+Generation runs `slint-dart-generate`, a binary built from the
+[`codegen`](./codegen) crate. The builder finds it under `target/`, builds it
+on first use if it isn't there, and `SLINT_DART_GENERATE` points at a copy
+elsewhere. It does not need `libslint_dart`, so generating a wrapper and
+building the runtime are independent.
 
 ```sh
-# From this repository's root:
-cargo build --release -p slint-dart
-# macOS:
-export SLINT_DART_LIBRARY=/path/to/slint-dart/target/release/libslint_dart.dylib
+cargo build --release -p slint-dart-codegen    # optional: pre-build it
 ```
-
-Use `libslint_dart.so` on Linux.
-Set `SLINT_DART_LIBRARY` to the `slint_dart.dll` path on Windows.
 
 Generate the Dart wrapper once:
 
@@ -143,8 +139,9 @@ lowerCamelCase:
 The generated wrapper keeps the Slint spelling for runtime lookup, so the
 public Dart identifier is never reconstructed from the Dart name.
 The compiler reports those names in their canonical form, with `_` written as
-`-`, and the Slint runtime treats the two as the same identifier — so
-`reset_counter` is looked up as `"reset-counter"`.
+`-`, so `reset_counter` is looked up as `"reset-counter"`.
+`-` and `_` name the same member everywhere in this binding, in generated
+wrappers and in the string-based API below, exactly as they do in `.slint`.
 
 Code generation is optional.
 Use `loadFile()` or `loadSource()` and the string-based `ComponentInstance` API
@@ -167,7 +164,18 @@ See the [`slint` code-generation example](./slint/example) for a complete packag
 
 ## Building
 
-The Dart side talks to `libslint_dart`, a small C ABI over `slint-interpreter`:
+Two Rust crates, and only one of them ends up in an application:
+
+| Crate | When it runs | What it produces |
+| --- | --- | --- |
+| [`codegen`](./codegen) (`slint-dart-generate`) | generate time, on the developer's machine | one `.slint.dart` per `.slint`, and nothing else |
+| root (`libslint_dart`) | runtime, inside the application | the C ABI the Dart package calls |
+
+Code generation emits **Dart only**. It never writes Rust, C or C++, and an
+application never compiles a generated artifact — the `.slint.dart` is ordinary
+Dart source, and the same prebuilt `libslint_dart` runs every application. That
+is also why the library carries the Slint interpreter: the wrapper hands it the
+compiled module to instantiate at `load()`.
 
 ```sh
 cargo build --release -p slint-dart
@@ -440,11 +448,12 @@ every command above is available as `fvm dart …` and `fvm flutter …`. Run
 - The untyped `loadFile()` still reads `.slint` from the filesystem, so it is
   unavailable on the web; use `loadSource()` there. Generated `load()` does
   not read source files.
-- The web still carries the Slint compiler in the WebAssembly module. Generated
-  wrappers embed a compilation unit and do not ship `.slint` text, but first
-  `load()` still goes through the interpreter, and untyped `loadSource()` needs
-  the compiler. That compiler is most of the wasm size; a compiler-free web
-  runtime is not split out yet.
+- The runtime carries the Slint compiler on every platform, and `load()` runs it
+  once per module at startup. A generated wrapper embeds the compiled `.slint`
+  graph, not machine code: Slint has no serialized form a compiler-free runtime
+  could load, and producing one would mean generating Rust and rebuilding
+  `libslint_dart` for every application — which is what this binding
+  deliberately does not do. On the web that compiler is most of the wasm size.
 - A Rust panic on the web aborts the module instead of unwinding, so the
   `catch_unwind` guards that turn a panic into a `SlintException` elsewhere do
   not apply there. The message still reaches the browser console.

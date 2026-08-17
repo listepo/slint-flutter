@@ -7,14 +7,23 @@ This repository was extracted from the Slint repository's `api/flutter`
 directory and now builds against released Slint crates from crates.io, so
 nothing here needs a Slint checkout.
 
-Four pieces live here, plus the Rust side they call into:
+Five pieces live here:
 
 | Piece | What it is |
 | --- | --- |
-| [`rust/`](./rust) | `slint-dart`, a Rust `cdylib` exposing a plain C ABI over `slint-interpreter`. |
+| [`rust/`](./rust) | `slint-dart`, a Rust `cdylib` exposing a plain C ABI over `slint-interpreter`. The runtime; this is what an application ships. |
+| [`codegen/`](./codegen) | `slint-dart-codegen` and its `slint-dart-generate` binary. Generate-time only: it holds the Slint compiler and emits Dart. Never linked into an application. |
 | [`slint/`](./slint) | `package:slint`, the binding itself. Pure Dart over `dart:ffi`, no Flutter dependency. |
 | [`slint_generator/`](./slint_generator) | The `build_runner` builder that turns a `.slint` file into a typed Dart API. Dev dependency only. |
 | [`slint_flutter/`](./slint_flutter) | A `SlintView` widget that renders a Slint UI inside a Flutter app. |
+
+**Code generation emits Dart and only Dart.** No Rust, no C, no C++, nothing an
+application has to compile: a generated `.slint.dart` is ordinary Dart source
+carrying the compiled `.slint` graph as data, and the same prebuilt
+`libslint_dart` runs every application. If a change would make the generator
+write another language, or make an application rebuild the runtime for its own
+UI, it is the wrong change — see the Limitations section of the README for why
+a compiler-free runtime is not available instead.
 
 ## Prerequisites
 
@@ -49,7 +58,7 @@ override discovery.
 ## Testing
 
 ```sh
-cargo test -p slint-dart --no-default-features --features renderer-software
+cargo test --workspace --no-default-features --features renderer-software
 ```
 
 The Dart tests must open no window, which is what `SlintSurface` arranges: each
@@ -109,10 +118,28 @@ documented in the README.
   instead of opening a native window. This is what Flutter uses, because the
   Dart VM does not run `main()` on the process main thread and a second native
   window would not compose with the widget tree.
-- `rust/dart.rs` — the `.slint` → `.slint.dart` code generator that
-  `slint_dart_generate` drives. Its siblings for C++, Rust and Python live
-  inside `i-slint-compiler`; this one lives here so the binding can build
+- `rust/compiled.rs` — decodes the module a generated wrapper carries and
+  instantiates it through the interpreter, once per process, from memory. The
+  encoder is `codegen/src/bundle.rs`; `MODULE_VERSION` must match on both sides.
+
+The runtime has no `generate` entry point. Adding one would put the compiler
+back in the shipped library.
+
+### The generate-time compiler (`codegen/`)
+
+- `codegen/src/lib.rs` — compiles one `.slint` and returns the Dart source,
+  the files to watch, and any diagnostics. `OutputFormat::Llr` configures the
+  compiler; the Rust, C++ and Python output formats are deliberately unused,
+  and the crate does not enable their features.
+- `codegen/src/dart.rs` — the `.slint` → `.slint.dart` generator. Its siblings
+  live inside `i-slint-compiler`; this one lives here so the binding builds
   against a released Slint. It reads the compiler's LLR, all public API.
+- `codegen/src/bundle.rs` — packs the `.slint` graph into the gzip+base64 blob
+  the wrapper embeds, with imports rewritten to a virtual root and `@image-url`
+  inlined as data URIs, so nothing is read from disk at `load()`.
+- `codegen/src/main.rs` — the `slint-dart-generate` binary. Prints the JSON
+  envelope the Dart builder reads; `--write` also writes the file, which
+  `build_runner` must not use because it owns its outputs.
 
 ### The binding (`slint/`)
 
@@ -137,8 +164,13 @@ documented in the README.
 - `slint_generator/lib/builder.dart` — the `slintBuilder` factory used by
   `build.yaml`.
 - `slint_generator/lib/src/builder.dart` — `SlintBuilder`, the `build_runner`
-  builder. Reads each `.slint` file, calls the native compiler's `generate`,
-  writes the `.slint.dart` wrapper, and registers compiler dependencies.
+  builder. Reads each `.slint` file, calls `package:slint/compiler.dart`'s
+  `generate` (which runs `slint-dart-generate`), writes the `.slint.dart`
+  wrapper, and registers compiler dependencies.
+- `slint/lib/compiler.dart` locates that binary — `SLINT_DART_GENERATE`, then
+  `target/`, then `PATH` — and builds it once from `codegen/Cargo.toml` when
+  this is a source checkout. It never loads `libslint_dart`, so generating a
+  wrapper does not require the runtime to be built.
 - The builder's `buildExtensions` getter is dynamic: the default emits
   `.slint.dart` next to the source, while an `output_dir` option relocates
   outputs into a custom folder via a capture group. `build_to: source` only
@@ -173,7 +205,7 @@ documented in the README.
 
 - Every source file carries the two-line copyright and SPDX header. New files
   get it too: `MIT` for this repository's own code, and whatever the original
-  carried for code lifted out of the Slint repository (`rust/dart.rs` and the
+  carried for code lifted out of the Slint repository (`codegen/src/dart.rs` and the
   `scripts/`, which keep Slint's triple license).
 
 ## Version Control (Git)

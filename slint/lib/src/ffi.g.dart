@@ -40,37 +40,6 @@ class SlintBindings {
   late final _freeString =
       _freeStringPtr.asFunction<void Function(ffi.Pointer<ffi.Char>)>();
 
-  /// Generate typed Dart bindings for a `.slint` file.
-  ///
-  /// The success envelope contains every file whose contents can affect the
-  /// result, plus either generated source or a generation error. The Dart builder
-  /// registers the dependencies before it reports the error so watch mode can
-  /// recover when an imported file changes.
-  ///
-  /// # Safety
-  /// `input_path`, `output_path`, and `options_json` must point to NUL-terminated strings.
-  ffi.Pointer<ffi.Char> generate(
-    ffi.Pointer<ffi.Char> input_path,
-    ffi.Pointer<ffi.Char> output_path,
-    ffi.Pointer<ffi.Char> options_json,
-  ) {
-    return _generate(
-      input_path,
-      output_path,
-      options_json,
-    );
-  }
-
-  late final _generatePtr = _lookup<
-      ffi.NativeFunction<
-          ffi.Pointer<ffi.Char> Function(
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>)>>('slint_dart_generate');
-  late final _generate = _generatePtr.asFunction<
-      ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Char>,
-          ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>();
-
   /// Create a compiler. Release it with [`slint_dart_compiler_free`].
   ffi.Pointer<SlintCompiler> compilerNew() {
     return _compilerNew();
