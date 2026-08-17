@@ -66,7 +66,7 @@ String findGenerator() {
   if (manifest == null) {
     throw StateError(
       'Cannot find $generatorFileName. Build it with\n'
-      '    cargo build --release -p slint-dart-codegen\n'
+      '    cd native && cargo build --release -p slint-dart-codegen\n'
       'or point SLINT_DART_GENERATE at the binary.',
     );
   }
@@ -98,13 +98,17 @@ String findGenerator() {
   return built;
 }
 
-/// `codegen/Cargo.toml` next to the crate that owns this package, or null when
+/// `native/codegen/Cargo.toml` next to the crate that owns this package, or null when
 /// this is not a source checkout (a published copy has no Rust sources).
 String? _codegenManifest() {
   for (final root in _searchRoots()) {
     for (var dir = Directory(root);; dir = dir.parent) {
-      final candidate = File(p.join(dir.path, 'codegen', 'Cargo.toml'));
-      if (candidate.existsSync()) return candidate.path;
+      for (final candidate in [
+        File(p.join(dir.path, 'native', 'codegen', 'Cargo.toml')),
+        File(p.join(dir.path, 'codegen', 'Cargo.toml')),
+      ]) {
+        if (candidate.existsSync()) return candidate.path;
+      }
       if (dir.parent.path == dir.path) break;
     }
   }
@@ -114,15 +118,24 @@ String? _codegenManifest() {
 String? _findInCargoTarget() {
   for (final root in _searchRoots()) {
     for (var dir = Directory(root);; dir = dir.parent) {
-      for (final profile in const ['release', 'debug']) {
-        final candidate =
-            File(p.join(dir.path, 'target', profile, generatorFileName));
-        if (candidate.existsSync()) return candidate.path;
+      for (final targetDir in _cargoTargetDirs(dir.path)) {
+        for (final profile in const ['release', 'debug']) {
+          final candidate =
+              File(p.join(targetDir, profile, generatorFileName));
+          if (candidate.existsSync()) return candidate.path;
+        }
       }
       if (dir.parent.path == dir.path) break;
     }
   }
   return null;
+}
+
+Iterable<String> _cargoTargetDirs(String root) {
+  return [
+    p.join(root, 'target'),
+    p.join(root, 'native', 'target'),
+  ];
 }
 
 String? _findOnPath() {

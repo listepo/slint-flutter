@@ -98,7 +98,7 @@ class SlintFfi extends SlintBindings {
     }
     throw StateError(
       'Cannot find $libraryFileName. Build it with\n'
-      '    cargo build --release -p slint-dart\n'
+      '    cd native && cargo build --release -p slint-dart\n'
       'or point SLINT_DART_LIBRARY at an existing copy.\n'
       'Underlying error: $lastError',
     );
@@ -134,13 +134,14 @@ class SlintFfi extends SlintBindings {
     };
     for (final root in roots) {
       for (var dir = Directory(root);; dir = dir.parent) {
-        for (final profile in const ['release', 'debug']) {
-          final candidate = File(
-            '${dir.path}${Platform.pathSeparator}target'
-            '${Platform.pathSeparator}$profile'
-            '${Platform.pathSeparator}$libraryFileName',
-          );
-          if (candidate.existsSync()) return candidate.path;
+        for (final targetDir in _cargoTargetDirs(dir.path)) {
+          for (final profile in const ['release', 'debug']) {
+            final candidate = File(
+              '$targetDir${Platform.pathSeparator}$profile'
+              '${Platform.pathSeparator}$libraryFileName',
+            );
+            if (candidate.existsSync()) return candidate.path;
+          }
         }
         if (dir.parent.path == dir.path) break;
       }
@@ -167,6 +168,15 @@ class SlintFfi extends SlintBindings {
     } on Object {
       return const [];
     }
+  }
+
+  /// Cargo output directories to search under [root]: `target/` and
+  /// `native/target/` when the workspace lives in a `native/` subdirectory.
+  static Iterable<String> _cargoTargetDirs(String root) {
+    return [
+      '$root${Platform.pathSeparator}target',
+      '$root${Platform.pathSeparator}native${Platform.pathSeparator}target',
+    ];
   }
 
   static String? _packageRoot(Map<String, dynamic> entry, File configFile) {

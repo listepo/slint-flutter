@@ -249,7 +249,9 @@ void main(List<String> arguments) async {
     }
 
     final profile = cargoProfile(input.userDefines['cargo_profile']);
-    final crateRoot = input.packageRoot.resolve('../');
+    // Trailing slash is required: without it `resolve('rust/')` resolves against
+    // the parent directory, not `native/`.
+    final crateRoot = input.packageRoot.resolve('../native/');
 
     // Android is always a cross-compile, so it cannot go through the host
     // `cargo build` path below; build the single ABI this invocation was asked

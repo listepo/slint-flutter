@@ -16,10 +16,11 @@ wrapper (and AOT Rust sidecar), then create a platform runner and run:
 
 ```sh
 # From the repository root:
+cd native
 cargo build --release -p slint-dart-codegen
 cargo build --release -p slint-dart
 
-cd examples/todo/flutter
+cd ../examples/todo/flutter
 fvm dart pub get
 fvm dart run build_runner build --delete-conflicting-outputs
 

@@ -101,9 +101,9 @@ void main() {
             '${build_hook.assetName}.${build_hook.libraryExtension(os)}');
 
         // The crate manifest and sources are declared so the hook cache
-        // invalidates when they change. They sit next to the `slint` package,
-        // one level up, which is also the Cargo workspace root.
-        final crateRoot = input.packageRoot.resolve('../');
+        // invalidates when they change. They sit in `native/`, next to the
+        // `slint` package at the repository root.
+        final crateRoot = input.packageRoot.resolve('../native/');
         final dependencies = output.dependencies.map((uri) => uri.path).toSet();
         expect(dependencies, contains(crateRoot.resolve('Cargo.toml').path));
         // With the trailing slash: the hook runner reads a dependency without

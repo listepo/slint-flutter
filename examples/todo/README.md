@@ -1,10 +1,7 @@
+# todo
 
-### `todo`
+A simple todo application.
 
-A simple todo application
+Dart/Flutter: see [`flutter/`](./flutter).
 
-| `.slint` Design | Rust Source | C++ Source | NodeJS | Dart | Online wasm Preview | Open in SlintPad |
-| --- | --- | --- | --- | --- | --- | --- |
-| [`todo.slint`](./ui/todo.slint) | [`main.rs`](./rust/main.rs) | [`main.cpp`](./cpp/main.cpp) | [`main.js`](./node/main.js) | [`main.dart`](./flutter/lib/main.dart) | [Online simulation](https://slint.dev/snapshots/master/demos/todo/) | [Preview in Online Code Editor](https://slint.dev/snapshots/master/editor?load_url=https://raw.githubusercontent.com/slint-ui/slint/master/examples/todo/ui/todo.slint) |
-
-![Screenshot of the Todo Demo](https://slint.dev/resources/todo_screenshot.png "Todo Demo")
+Shared `.slint`: [`ui/todo.slint`](./ui/todo.slint) (mirrored in the Flutter package without `@rust-attr`).

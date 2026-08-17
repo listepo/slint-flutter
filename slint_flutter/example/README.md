@@ -10,6 +10,7 @@ wrapper, then create a platform runner and run:
 
 ```sh
 # From the repository root:
+cd native
 cargo build --release -p slint-dart-codegen
 cargo build --release -p slint-dart
 
@@ -38,8 +39,9 @@ Widget tests use the embedded software renderer (`SlintSurface` via
 
 ```sh
 fvm dart run build_runner build --delete-conflicting-outputs
+cd ../../native
 cargo build -p slint-dart --no-default-features --features renderer-software
-SLINT_DART_LIBRARY="$PWD/../../target/debug/libslint_dart.dylib" \
+SLINT_DART_LIBRARY="$PWD/../../native/target/debug/libslint_dart.dylib" \
   fvm flutter test
 ```
 

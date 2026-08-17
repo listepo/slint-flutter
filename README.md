@@ -45,12 +45,14 @@ dev_dependencies:
 ```
 
 Generation runs `slint-dart-generate`, a binary built from the
-[`codegen`](./codegen) crate. The builder finds it under `target/`, builds it
+[`codegen`](./native/codegen) crate. The builder finds it under `native/target/`,
+builds it
 on first use if it isn't there, and `SLINT_DART_GENERATE` points at a copy
 elsewhere. It does not need `libslint_dart`, so generating a wrapper and
 building the runtime are independent.
 
 ```sh
+cd native
 cargo build --release -p slint-dart-codegen    # optional: pre-build it
 ```
 
@@ -169,8 +171,8 @@ Two Rust crates, and only one of them ends up in an application:
 
 | Crate | When it runs | What it produces |
 | --- | --- | --- |
-| [`codegen`](./codegen) (`slint-dart-generate`) | generate time, on the developer's machine | one `.slint.dart` per `.slint`, and nothing else |
-| root (`libslint_dart`) | runtime, inside the application | the C ABI the Dart package calls |
+| [`codegen`](./native/codegen) (`slint-dart-generate`) | generate time, on the developer's machine | one `.slint.dart` per `.slint`, and nothing else |
+| [`native`](./native) (`libslint_dart`) | runtime, inside the application | the C ABI the Dart package calls |
 
 Code generation emits **Dart only**. It never writes Rust, C or C++, and an
 application never compiles a generated artifact — the `.slint.dart` is ordinary
@@ -179,19 +181,20 @@ is also why the library carries the Slint interpreter: the wrapper hands it the
 compiled module to instantiate at `load()`.
 
 ```sh
+cd native
 cargo build --release -p slint-dart
 ```
 
 `package:slint` finds the library by looking at `SLINT_DART_LIBRARY` first, then
 walking up from the working directory, the running executable, the running
-script, and the linked package root for a `target/release` or `target/debug`
-copy, and finally asking the platform loader.
+script, and the linked package root for a `native/target/release` or
+`native/target/debug` copy, and finally asking the platform loader.
 That last step is the one a packaged application takes.
 
 ### The `dart:ffi` bindings are generated
 
 The 38 entry points are not declared by hand on both sides. cbindgen writes a
-C header from `rust/`, and ffigen turns that into
+C header from `native/rust/`, and ffigen turns that into
 [`slint/lib/src/ffi.g.dart`](./slint/lib/src/ffi.g.dart):
 
 ```sh
@@ -255,7 +258,7 @@ the library to an xcframework you build once:
 ./scripts/build_slint_dart_xcframework.bash
 ```
 
-That produces `target/SlintDart.xcframework` holding `slint_dart.framework`
+That produces `native/target/SlintDart.xcframework` holding `slint_dart.framework`
 for the device (`arm64`), the simulator (`arm64` and `x86_64`) and macOS
 (`arm64` and `x86_64`). Add it to the Runner target's *Frameworks, Libraries,
 and Embedded Content* with **Embed & Sign**. These are ordinary dynamic
@@ -271,7 +274,7 @@ set, the cargo profile, the output path and the minimum OS versions.
 ### The web loads a WebAssembly module
 
 A browser has no `dart:ffi`, so `package:slint` reaches the same Rust code
-through WebAssembly instead: `rust/wasm.rs` exposes the runtime to
+through WebAssembly instead: `native/rust/wasm.rs` exposes the runtime to
 JavaScript with `wasm-bindgen`, and
 [`backend_web.dart`](./slint/lib/src/backend_web.dart) calls it over
 `dart:js_interop`. Everything above that line — properties, callbacks, the
@@ -400,6 +403,7 @@ initTranslations((string, {context, plural, n = 0}) => catalog[string] ?? string
 ## Testing
 
 ```sh
+cd native
 cargo test -p slint-dart
 ```
 
@@ -410,11 +414,12 @@ every host, including macOS, where the Dart VM's worker thread cannot own a
 native event loop.
 
 ```sh
+cd native
 cargo build -p slint-dart --no-default-features --features renderer-software
-cd slint
-SLINT_DART_LIBRARY="$PWD/../target/debug/libslint_dart.dylib" fvm dart test
+cd ../slint
+SLINT_DART_LIBRARY="$PWD/../native/target/debug/libslint_dart.dylib" fvm dart test
 cd ../slint_flutter
-SLINT_DART_LIBRARY="$PWD/../target/debug/libslint_dart.dylib" fvm flutter test
+SLINT_DART_LIBRARY="$PWD/../native/target/debug/libslint_dart.dylib" fvm flutter test
 cd ../slint_generator
 fvm dart test    # a fake generator, so no native library is needed
 ```
@@ -438,25 +443,22 @@ every command above is available as `fvm dart …` and `fvm flutter …`. Run
 
 - [`slint_flutter/example`](./slint_flutter/example) — the code-generation
   example, a Flutter application with a generated `CounterWindow` wrapper.
-- [`examples/todo/flutter`](./examples/todo/flutter) — the todo demo, also a
-  Flutter application with a generated `MainWindow` wrapper.
-- The printer demo lives in the Slint repository, under
-  `demos/printerdemo/flutter`.
+- [`examples/`](./examples) — Flutter demos (`todo`, `gallery`, `memory`,
+  `carousel`, and others). Each app lives under `examples/<name>/flutter`
+  and uses a generated typed wrapper via `Component.load()`. See
+  [`examples/README.md`](./examples/README.md).
 
 ## Limitations
 
 - One `SlintSurface` per isolate: the software renderer owns a single surface.
 - Everything must be used from the main isolate, which is where the Slint
   platform lives. This matches the Python and Node.js bindings.
-- The untyped `loadFile()` still reads `.slint` from the filesystem, so it is
-  unavailable on the web; use `loadSource()` there. Generated `load()` does
-  not read source files.
-- The runtime carries the Slint compiler on every platform, and `load()` runs it
-  once per module at startup. A generated wrapper embeds the compiled `.slint`
-  graph, not machine code: Slint has no serialized form a compiler-free runtime
-  could load, and producing one would mean generating Rust and rebuilding
-  `libslint_dart` for every application — which is what this binding
-  deliberately does not do. On the web that compiler is most of the wasm size.
+- There is no runtime `.slint` loader. Every UI is compiled ahead of time
+  into `libslint_dart` (or the wasm module) and instantiated with generated
+  `load()`.
+- Dart web does not yet look up generated `slint_aot_*` wasm exports, so
+  `AotHandle.create` throws there. The wasm module itself does not include
+  the compiler.
 - A Rust panic on the web aborts the module instead of unwinding, so the
   `catch_unwind` guards that turn a panic into a `SlintException` elsewhere do
   not apply there. The message still reaches the browser console.

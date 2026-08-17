@@ -407,6 +407,13 @@ packages:
       relative: true
     source: path
     version: "1.18.0"
+  slint_example_test_support:
+    dependency: "direct dev"
+    description:
+      path: "../../test_support"
+      relative: true
+    source: path
+    version: "1.18.0"
   slint_flutter:
     dependency: "direct main"
     description:

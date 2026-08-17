@@ -9,7 +9,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target}"
+NATIVE="$ROOT/native"
+TARGET_DIR="${CARGO_TARGET_DIR:-$NATIVE/target}"
 PROFILE="${SLINT_DART_PROFILE:-release}"
 OUTPUT="${SLINT_DART_XCFRAMEWORK:-$TARGET_DIR/SlintDart.xcframework}"
 STAGE="$TARGET_DIR/xcframework-slices"
@@ -18,7 +19,7 @@ STAGE="$TARGET_DIR/xcframework-slices"
 # and what `ffi.dart` looks for.
 NAME=slint_dart
 BUNDLE_ID=dev.slint.slintdart
-VERSION="$(sed -n '/^\[package\]/,/^\[/s/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)"
+VERSION="$(sed -n '/^\[package\]/,/^\[/s/^version = "\(.*\)"/\1/p' "$NATIVE/Cargo.toml" | head -1)"
 
 export IPHONEOS_DEPLOYMENT_TARGET="${IPHONEOS_DEPLOYMENT_TARGET:-13.0}"
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-11.0}"
@@ -69,7 +70,7 @@ make_framework() {
     for target in "$@"; do
         echo "==> building slint-dart for $target" >&2
         # shellcheck disable=SC2086 # FEATURES is a deliberate argument list.
-        cargo build --manifest-path "$ROOT/Cargo.toml" --profile "$PROFILE" \
+        cargo build --manifest-path "$NATIVE/Cargo.toml" --profile "$PROFILE" \
             --package slint-dart --target "$target" $FEATURES >&2
         dylibs+=("$TARGET_DIR/$target/$PROFILE/lib$NAME.dylib")
     done

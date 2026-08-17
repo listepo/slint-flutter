@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Regenerate the Dart FFI bindings for the `slint-dart` C ABI.
 #
-#   rust/  --cbindgen-->  target/slint_dart.h
+#   native/rust/  --cbindgen-->  native/target/slint_dart.h
 #          --ffigen---->  slint/lib/src/ffi.g.dart
 #
 # The generated file is committed, so `--check` verifies it still matches the
@@ -12,7 +12,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PACKAGE="$ROOT/slint"
-HEADER="${CARGO_TARGET_DIR:-$ROOT/target}/slint_dart.h"
+NATIVE="$ROOT/native"
+HEADER="${CARGO_TARGET_DIR:-$NATIVE/target}/slint_dart.h"
 GENERATED="$PACKAGE/lib/src/ffi.g.dart"
 
 check=0
@@ -43,8 +44,8 @@ fi
 mkdir -p "$(dirname "$HEADER")"
 # The crate directory is passed explicitly: cbindgen otherwise resolves it
 # from the working directory, which is wherever this script was invoked.
-"$cbindgen" --config "$ROOT/cbindgen.toml" \
-    --crate slint-dart --output "$HEADER" --quiet "$ROOT"
+"$cbindgen" --config "$NATIVE/cbindgen.toml" \
+    --crate slint-dart --output "$HEADER" --quiet "$NATIVE"
 
 if [ "$check" -eq 1 ]; then
     # ffigen only writes to the path in ffigen.yaml, so generate in place and

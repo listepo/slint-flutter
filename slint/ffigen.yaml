@@ -1,5 +1,5 @@
 # Generates `lib/src/ffi.g.dart` from the C header cbindgen writes out of
-# `rust/`. Run `./scripts/generate_slint_dart_bindings.bash` from the
+# `native/rust/`. Run `./scripts/generate_slint_dart_bindings.bash` from the
 # repository root, which regenerates the header first.
 
 name: SlintBindings
@@ -13,7 +13,7 @@ llvm-path:
 
 headers:
   entry-points:
-    - '../target/slint_dart.h'
+    - '../native/target/slint_dart.h'
   # Without this, everything reachable through <stdlib.h> and friends comes
   # along: ~800 system macros for 37 functions.
   include-directives:

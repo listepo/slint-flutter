@@ -1,0 +1,26 @@
+name: iot_dashboard
+description: IoT dashboard demo as a Flutter application.
+version: 1.18.0
+publish_to: none
+
+environment:
+  sdk: ^3.3.0
+  flutter: ">=3.16.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  slint:
+    path: ../../../slint
+  slint_flutter:
+    path: ../../../slint_flutter
+
+dev_dependencies:
+  slint_example_test_support:
+    path: ../../test_support
+  build_runner: ^2.4.9
+  flutter_lints: ^5.0.0
+  flutter_test:
+    sdk: flutter
+  slint_generator:
+    path: ../../../slint_generator

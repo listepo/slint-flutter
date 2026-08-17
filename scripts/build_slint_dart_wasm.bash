@@ -12,7 +12,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target}"
+NATIVE="$ROOT/native"
+TARGET_DIR="${CARGO_TARGET_DIR:-$NATIVE/target}"
 STAGE="$TARGET_DIR/wasm-web"
 DESTINATION="${1:-}"
 
@@ -32,7 +33,7 @@ if ! rustup target list --installed | grep -qx wasm32-unknown-unknown; then
   rustup target add wasm32-unknown-unknown
 fi
 
-wasm-pack build "$ROOT" \
+wasm-pack build "$NATIVE" \
   --target web \
   --out-dir "$STAGE" \
   --out-name slint_dart \
