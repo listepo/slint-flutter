@@ -34,6 +34,7 @@ use std::time::Duration;
 
 use values::{dart_value_from_json, dart_value_from_json_str, dart_value_to_json};
 
+mod compiled;
 mod dart;
 mod embedded;
 mod values;
@@ -280,8 +281,8 @@ fn generate_dart_bindings(
     // output format of its own for it. `Llr` is the one to configure with:
     // like the C++ and Python generators it embeds only builtin resources and
     // leaves inlining alone, which is what a generator that reads the LLR
-    // wants. `Interpreter` would force inlining and resource decisions meant
-    // for the runtime that compiles the same file again at load time.
+    // wants. The compiled module bundled into the wrapper is compiled by the
+    // interpreter at first `load()`, from those embedded files, not from disk.
     let mut compiler_config = i_slint_compiler::CompilerConfiguration::new(OutputFormat::Llr);
     compiler_config.include_paths = options.include_paths;
     compiler_config.style = options.style;
@@ -296,7 +297,15 @@ fn generate_dart_bindings(
         return Ok(dart_generation_result(None, Some(error), dependencies, &diagnostics));
     }
 
-    let generated = dart::generate(&document, &loader.compiler_config, Some(&output_path));
+    let compiled_module =
+        match compiled::bundle(&document, &loader, loader.compiler_config.style.as_deref()) {
+            Ok(module) => module,
+            Err(error) => {
+                return Ok(dart_generation_result(None, Some(error), dependencies, &diagnostics));
+            }
+        };
+    let generated =
+        dart::generate(&document, &loader.compiler_config, Some(&output_path), &compiled_module);
     let source = match generated {
         Ok(source) => source,
         Err(error) => {
@@ -411,6 +420,36 @@ pub unsafe extern "C" fn slint_dart_compiler_build_from_source(
     let source = unsafe { str_or_empty(source) }.to_string();
     let path = PathBuf::from(unsafe { str_or_empty(path) });
     into_raw_or_null(|| spin_on::spin_on(compiler.build_from_source(source, path)))
+}
+
+/// Instantiate a component from a compilation unit produced at generate time.
+/// Returns null on failure, with the reason written to `error` (release it
+/// with [`slint_dart_free_string`]).
+///
+/// # Safety
+/// `module_blob` and `component` must be NUL-terminated strings (`component`
+/// may be null). `error` must be a valid pointer to a `*mut c_char`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn slint_dart_load_compiled(
+    module_blob: *const c_char,
+    component: *const c_char,
+    error: *mut *mut c_char,
+) -> *mut ComponentInstance {
+    let blob = unsafe { str_or_empty(module_blob) };
+    let component = unsafe { opt_str(component) };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        compiled::instantiate(blob, component)
+    })) {
+        Ok(Ok(instance)) => Box::into_raw(Box::new(instance)),
+        Ok(Err(message)) => {
+            unsafe { *error = into_c_string(message) };
+            std::ptr::null_mut()
+        }
+        Err(panic) => {
+            unsafe { *error = into_c_string(panic_message(&panic)) };
+            std::ptr::null_mut()
+        }
+    }
 }
 
 /// Box the result of `body`, or return null if it panicked. See [`guard`].
@@ -946,6 +985,16 @@ mod tests {
         CString::new(s).unwrap()
     }
 
+    fn compiled_blob_from_dart(source: &str) -> &str {
+        const MARKER: &str = "instantiateCompiled(";
+        let start = source.find(MARKER).expect("generated source instantiates a compiled module");
+        let after = &source[start + MARKER.len()..];
+        let quote = after.find('"').expect("compiled module string");
+        let body = &after[quote + 1..];
+        let end = body.find('"').expect("compiled module string terminator");
+        &body[..end]
+    }
+
     /// Compile `source` and instantiate its only component.
     fn instantiate(source: &str) -> ComponentInstance {
         i_slint_backend_testing::init_no_event_loop();
@@ -1249,8 +1298,9 @@ mod tests {
         assert!(source.contains("int invokeDoWork"), "{source}");
         assert!(source.contains("getProperty(\"todo-model\")"), "{source}");
         assert!(source.contains("factory MainWindow.load("), "{source}");
-        assert!(source.contains("factory MainWindow.loadSource("), "{source}");
-        assert!(source.contains("slint.loadSource("), "{source}");
+        assert!(source.contains("slint.instantiateCompiled("), "{source}");
+        assert!(!source.contains("slint.loadFile("), "{source}");
+        assert!(!source.contains("factory MainWindow.loadSource("), "{source}");
 
         let dependencies = generated["dependencies"].as_array().unwrap();
         assert!(dependencies.iter().any(|path| path.as_str().is_some_and(|path| {
@@ -1375,14 +1425,16 @@ mod tests {
 
         assert!(generated["error"].is_null(), "{generated}");
         let source = generated["source"].as_str().unwrap();
-        assert!(source.contains("String? style = \"material\""), "{source}");
-        assert!(source.contains("List<String> includePaths = const ["), "{source}");
+        assert!(source.contains("factory App.load()"), "{source}");
+        assert!(source.contains("slint.instantiateCompiled("), "{source}");
+        assert!(!source.contains("includePaths"), "{source}");
+        let include_path = includes.to_string_lossy();
+        assert!(!source.contains(include_path.as_ref()), "{source}");
+        let module = compiled::decode_module(compiled_blob_from_dart(source)).unwrap();
+        assert_eq!(module["style"], "material");
         assert!(
-            !source.contains(&format!(
-                "List<String> includePaths = const [{}]",
-                serde_json::to_string(&includes.to_string_lossy()).unwrap()
-            )),
-            "{source}"
+            module["files"].as_object().unwrap().keys().any(|path| path.ends_with("shared.slint")),
+            "{module}"
         );
         let dependencies = generated["dependencies"].as_array().unwrap();
         assert!(dependencies.iter().any(|path| path.as_str().is_some_and(|path| {
@@ -1390,6 +1442,44 @@ mod tests {
         })));
 
         std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn generated_wrappers_instantiate_without_the_original_source() {
+        i_slint_backend_testing::init_no_event_loop();
+        let directory = std::env::temp_dir().join(format!(
+            "slint-dart-aot-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let shared = directory.join("shared.slint");
+        let input = directory.join("app.slint");
+        let output = directory.join("app.slint.dart");
+        std::fs::write(&shared, "export component Shared { }").unwrap();
+        std::fs::write(
+            &input,
+            r#"
+                import { Shared } from "shared.slint";
+                export component App inherits Shared {
+                    in-out property <int> n: 9;
+                }
+            "#,
+        )
+        .unwrap();
+
+        let input_string = c(&input.to_string_lossy());
+        let output_string = c(&output.to_string_lossy());
+        let options = c("{}");
+        let generated = unwrap_ok(unsafe {
+            slint_dart_generate(input_string.as_ptr(), output_string.as_ptr(), options.as_ptr())
+        });
+        let source = generated["source"].as_str().unwrap();
+        let blob = compiled_blob_from_dart(source).to_string();
+        std::fs::remove_dir_all(&directory).unwrap();
+
+        let instance = compiled::instantiate(&blob, Some("App")).unwrap();
+        assert_eq!(instance.get_property("n").unwrap(), slint_interpreter::Value::Number(9.0));
     }
 
     #[test]

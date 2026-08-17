@@ -76,6 +76,9 @@ abstract interface class SlintBackend {
 
   int buildFromSource(int compiler, String source, String path);
 
+  /// Instantiate a component from a compilation unit produced at generate time.
+  int loadCompiled(String module, String? component);
+
   // Compilation result -----------------------------------------------------
 
   void resultFree(int result);

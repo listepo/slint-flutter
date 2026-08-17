@@ -132,6 +132,24 @@ class NativeBackend implements SlintBackend {
         ),
       );
 
+  @override
+  int loadCompiled(String module, String? component) {
+    final error = malloc<Pointer<Char>>()..value = nullptr;
+    try {
+      final instance = withNativeString(
+        module,
+        (m) => withNativeString(
+          component,
+          (c) => _ffi.loadCompiled(m, c, error),
+        ),
+      );
+      if (instance == nullptr) throw SlintException(takeString(error.value));
+      return instance.address;
+    } finally {
+      malloc.free(error);
+    }
+  }
+
   // Compilation result -----------------------------------------------------
 
   @override

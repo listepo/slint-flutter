@@ -4684,6 +4684,7 @@ version = "1.18.0"
 dependencies = [
  "base64",
  "console_error_panic_hook",
+ "flate2",
  "i-slint-backend-testing",
  "i-slint-backend-winit",
  "i-slint-compiler",

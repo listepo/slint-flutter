@@ -113,6 +113,21 @@ pub fn build_from_source(compiler: u32, source: &str, path: &str) -> u32 {
     }
 }
 
+/// Instantiate a component from a compilation unit produced at generate time.
+#[wasm_bindgen]
+pub fn load_compiled(module_blob: &str, component: Option<String>) -> String {
+    let module_blob = c_string(module_blob);
+    let component = opt_c_string(component);
+    let mut error: *mut c_char = std::ptr::null_mut();
+    let instance = unsafe {
+        crate::slint_dart_load_compiled(module_blob.as_ptr(), as_ptr(&component), &mut error)
+    };
+    if instance.is_null() {
+        return envelope_err(&take(error));
+    }
+    serde_json::json!({ "ok": instance as usize as u32 }).to_string()
+}
+
 #[wasm_bindgen]
 pub fn result_free(result: u32) {
     unsafe { crate::slint_dart_result_free(result as usize as *mut _) };

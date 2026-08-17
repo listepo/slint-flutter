@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:slint/compiler.dart';
 import 'package:slint/slint.dart';
 import 'package:test/test.dart';
 
@@ -210,6 +211,35 @@ void main() {
         () => loadFile('/definitely/not/here.slint'),
         throwsA(isA<SlintException>()),
       );
+    });
+
+    test('generated wrappers instantiate without the original file', () {
+      final directory = Directory.systemTemp.createTempSync('slint-dart-aot');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      final shared = File('${directory.path}/shared.slint')
+        ..writeAsStringSync('export component Shared { }');
+      final input = File('${directory.path}/app.slint')..writeAsStringSync('''
+import { Shared } from "shared.slint";
+export component App inherits Shared {
+    in-out property <int> n: 9;
+}
+''');
+      final output = File('${directory.path}/app.slint.dart');
+      final generated = generate(input.path, output.path, '{}');
+      expect(generated['error'], isNull);
+      final source = generated['source']! as String;
+      expect(source, contains('instantiateCompiled'));
+      expect(source, isNot(contains('loadFile')));
+      expect(source, isNot(contains('loadSource')));
+      final match =
+          RegExp(r'instantiateCompiled\(\s*"([^"]+)"').firstMatch(source);
+      expect(match, isNotNull);
+      input.deleteSync();
+      shared.deleteSync();
+
+      final loaded = instantiateCompiled(match!.group(1)!, component: 'App');
+      addTearDown(loaded.dispose);
+      expect(loaded['n'], 9);
     });
   });
 

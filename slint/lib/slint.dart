@@ -161,6 +161,13 @@ ComponentInstance loadSource(
       includePaths: includePaths,
     );
 
+/// Instantiate a component from a compilation unit produced at generate time.
+///
+/// Generated wrappers call this from `load()`. The blob is the `.slint` graph
+/// compiled when the wrapper was generated, so the original file is not read.
+ComponentInstance instantiateCompiled(String module, {String? component}) =>
+    ComponentInstance._(backend.loadCompiled(module, component));
+
 ComponentInstance _instantiate(
   int Function(int compiler) build, {
   required String? component,

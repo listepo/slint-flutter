@@ -40,6 +40,7 @@ functions:
     'slint_dart_compiler_add_include_path': 'compilerAddIncludePath'
     'slint_dart_compiler_build_from_path': 'buildFromPath'
     'slint_dart_compiler_build_from_source': 'buildFromSource'
+    'slint_dart_load_compiled': 'loadCompiled'
     'slint_dart_generate': 'generate'
     'slint_dart_result_free': 'resultFree'
     'slint_dart_result_has_errors': 'resultHasErrors'

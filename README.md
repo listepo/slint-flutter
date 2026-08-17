@@ -87,11 +87,9 @@ targets:
 Each `include_paths` entry is relative to the application package unless it is
 absolute.
 Imported files must remain inside the package so `build_runner` can watch them.
-The generated `load()` method uses the configured style and include paths as
-its runtime defaults.
-Relative include paths remain relative to the package directory where
-generation ran, so the output doesn't contain a developer-specific package path.
-Callers can still override its `style:` and `includePaths:` arguments.
+The generator compiles those files — and the configured style — into the
+wrapper. `load()` instantiates that compilation and does not take `style` or
+`includePaths`.
 
 By default the builder writes `lib/ui/counter.slint.dart` next to the input
 file.
@@ -125,31 +123,19 @@ import 'package:my_app/ui/counter.slint.dart';
 final app = CounterWindow.load();
 ```
 
-`loadSource` compiles the same component from `.slint` text already in memory,
-and still returns the generated type:
+`load()` instantiates the component compiled into the wrapper at generate time.
+It does not read the `.slint` file, so packaged Flutter apps do not need to
+ship that file as an asset.
 
-```dart
-final app = CounterWindow.loadSource(source);
-```
-
-By default, `load()` uses a `.slint` path relative to the package directory
-where generation ran.
-Run the application from that directory, or pass `path:` when it starts with a
-different working directory.
-The current binding loads Slint source at runtime.
-`load()` reads that source from the filesystem.
-Packaged Flutter apps should declare the `.slint` file as a Flutter asset,
-preload it with `rootBundle.loadString` before `runApp`, and pass the text to
-`loadSource`.
-If configured include directories move too, pass their deployed locations with
-`includePaths:`.
+The untyped `loadFile()` / `loadSource()` API is still there when the component
+isn't known at build time, and still compiles `.slint` at runtime.
 
 Generated Dart types use UpperCamelCase, and generated fields and methods use
 lowerCamelCase:
 
 | Slint declaration | Generated Dart API |
 | --- | --- |
-| `export component counter-window` | `CounterWindow.load()`, `CounterWindow.loadSource(source)` |
+| `export component counter-window` | `CounterWindow.load()` |
 | `in-out property <int> current-count` | `currentCount` |
 | `callback count-changed(int)` | `onCountChanged(...)`, `invokeCountChanged(...)` |
 | `public function reset_counter()` | `invokeResetCounter()` |
@@ -305,9 +291,10 @@ It returns immediately on every other platform, so call it unconditionally.
 module specifier, so a relative path needs the leading `./`.
 
 Two entry points have no meaning in a browser and throw `SlintException`:
-`loadFile()`, because there is no filesystem — fetch the `.slint` source and
-use `loadSource()` — and `run()`/`runEventLoop()`, because the browser owns
-the event loop. `SlintView` drives the frames instead.
+`loadFile()`, because there is no filesystem — the untyped API must fetch the
+`.slint` source and use `loadSource()` — and `run()`/`runEventLoop()`, because
+the browser owns the event loop. Generated wrappers use `load()` and do not
+need the original file. `SlintView` drives the frames instead.
 
 Because the software renderer rasterizes every pixel itself, this build turns
 on `i-slint-core`'s `image-decoders` and `svg` features, which a wasm build
@@ -345,32 +332,10 @@ import 'package:my_app/ui/counter.slint.dart';
 SlintView(load: CounterWindow.load)
 ```
 
-This direct factory form assumes the Slint source is available on the
-filesystem at its generated package-relative path and the package directory is
-the working directory.
-For a packaged app, preload the `.slint` file from the Flutter asset bundle
-and compile it with `loadSource`:
-
-```dart
-WidgetsFlutterBinding.ensureInitialized();
-final source = await rootBundle.loadString('lib/ui/counter.slint');
-runApp(MyApp(source: source));
-
-// Inside a widget tree:
-SlintView(load: () => CounterWindow.loadSource(source))
-```
-
-If the source is on the filesystem instead, wrap the factory and provide the
-deployed path:
-
-```dart
-SlintView(load: () => CounterWindow.load(
-  path: deployedSlintPath,
-  includePaths: [deployedIncludesPath],
-))
-```
-
-The dynamic API works here too: `SlintView(load: () => loadFile('ui/todo.slint'))`.
+Generated `load()` does not read the `.slint` file, so this form is what
+packaged Flutter apps use. The untyped API still compiles source at runtime:
+`SlintView(load: () => loadFile('ui/todo.slint'))` on desktop, or
+`loadSource` after fetching the text on the web.
 
 Driving it yourself is the same three steps `SlintView` performs each frame:
 
@@ -472,13 +437,14 @@ every command above is available as `fvm dart …` and `fvm flutter …`. Run
 - One `SlintSurface` per isolate: the software renderer owns a single surface.
 - Everything must be used from the main isolate, which is where the Slint
   platform lives. This matches the Python and Node.js bindings.
-- Generated wrappers load the original `.slint` source at runtime.
-  Packaged Flutter apps should bundle that file as a Flutter asset and call
-  `loadSource` with the preloaded text.
-  `load()` and `loadFile()` still read from the filesystem, and neither exists
-  on the web.
-- The web carries the whole Slint compiler in the WebAssembly module, because
-  the wrappers compile `.slint` at runtime. That is most of its size.
+- The untyped `loadFile()` still reads `.slint` from the filesystem, so it is
+  unavailable on the web; use `loadSource()` there. Generated `load()` does
+  not read source files.
+- The web still carries the Slint compiler in the WebAssembly module. Generated
+  wrappers embed a compilation unit and do not ship `.slint` text, but first
+  `load()` still goes through the interpreter, and untyped `loadSource()` needs
+  the compiler. That compiler is most of the wasm size; a compiler-free web
+  runtime is not split out yet.
 - A Rust panic on the web aborts the module instead of unwinding, so the
   `catch_unwind` guards that turn a panic into a `SlintException` elsewhere do
   not apply there. The message still reaches the browser console.

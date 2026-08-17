@@ -37,6 +37,8 @@ extension type _SlintModule(JSObject _) implements JSObject {
   external void compilerAddIncludePath(int compiler, String path);
   @JS('build_from_source')
   external int buildFromSource(int compiler, String source, String path);
+  @JS('load_compiled')
+  external String loadCompiled(String module, String? component);
 
   @JS('result_free')
   external void resultFree(int result);
@@ -215,6 +217,10 @@ class WebBackend implements SlintBackend {
   @override
   int buildFromSource(int compiler, String source, String path) =>
       _slint.buildFromSource(compiler, source, path);
+
+  @override
+  int loadCompiled(String module, String? component) =>
+      decodeEnvelope(_slint.loadCompiled(module, component))! as int;
 
   // Compilation result -----------------------------------------------------
 

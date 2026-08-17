@@ -188,6 +188,35 @@ class SlintBindings {
       ffi.Pointer<SlintCompilationResult> Function(ffi.Pointer<SlintCompiler>,
           ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>();
 
+  /// Instantiate a component from a compilation unit produced at generate time.
+  /// Returns null on failure, with the reason written to `error` (release it
+  /// with [`slint_dart_free_string`]).
+  ///
+  /// # Safety
+  /// `module_blob` and `component` must be NUL-terminated strings (`component`
+  /// may be null). `error` must be a valid pointer to a `*mut c_char`.
+  ffi.Pointer<SlintComponentInstance> loadCompiled(
+    ffi.Pointer<ffi.Char> module_blob,
+    ffi.Pointer<ffi.Char> component,
+    ffi.Pointer<ffi.Pointer<ffi.Char>> error,
+  ) {
+    return _loadCompiled(
+      module_blob,
+      component,
+      error,
+    );
+  }
+
+  late final _loadCompiledPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<SlintComponentInstance> Function(
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Pointer<ffi.Char>>)>>('slint_dart_load_compiled');
+  late final _loadCompiled = _loadCompiledPtr.asFunction<
+      ffi.Pointer<SlintComponentInstance> Function(ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Pointer<ffi.Char>>)>();
+
   /// # Safety
   /// `result` must come from a `build_from_*` call and not be used afterwards.
   void resultFree(

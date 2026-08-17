@@ -42,6 +42,7 @@ accessibility = ["slint-interpreter/accessibility"]
 
 [dependencies]
 base64 = "0.22"
+flate2 = "1"
 i-slint-compiler = "1.17.1"
 i-slint-core = { version = "1.17.1", features = ["tr"] }
 i-slint-renderer-software = { version = "1.17.1", features = ["std"] }
