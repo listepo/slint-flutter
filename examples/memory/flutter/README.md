@@ -7,8 +7,8 @@ cd native
 cargo build --release -p slint-dart-codegen
 cargo build --release -p slint-dart
 cd ../examples/memory/flutter
-fvm dart pub get
-fvm dart run build_runner build --delete-conflicting-outputs
-fvm flutter create . --platforms=macos --project-name memory
-fvm flutter run -d macos
+dart pub get
+dart run build_runner build --delete-conflicting-outputs
+flutter create . --platforms=macos --project-name memory
+flutter run -d macos
 ```

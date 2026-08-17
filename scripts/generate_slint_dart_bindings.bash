@@ -35,11 +35,9 @@ if [ ! -x "$cbindgen" ] && ! command -v "$cbindgen" >/dev/null 2>&1; then
     exit 1
 fi
 
-# The repository pins its Dart SDK with FVM; fall back to a plain dart on PATH.
+# The repository pins its Dart SDK with mise; the shims put a plain `dart` on
+# PATH, so just use it directly.
 dart=(dart)
-if command -v fvm >/dev/null 2>&1 && [ -f "$ROOT/.fvmrc" ]; then
-    dart=(fvm dart)
-fi
 
 mkdir -p "$(dirname "$HEADER")"
 # The crate directory is passed explicitly: cbindgen otherwise resolves it

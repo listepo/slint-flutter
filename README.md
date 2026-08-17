@@ -417,11 +417,11 @@ native event loop.
 cd native
 cargo build -p slint-dart --no-default-features --features renderer-software
 cd ../slint
-SLINT_DART_LIBRARY="$PWD/../native/target/debug/libslint_dart.dylib" fvm dart test
+SLINT_DART_LIBRARY="$PWD/../native/target/debug/libslint_dart.dylib" dart test
 cd ../slint_flutter
-SLINT_DART_LIBRARY="$PWD/../native/target/debug/libslint_dart.dylib" fvm flutter test
+SLINT_DART_LIBRARY="$PWD/../native/target/debug/libslint_dart.dylib" flutter test
 cd ../slint_generator
-fvm dart test    # a fake generator, so no native library is needed
+dart test    # a fake generator, so no native library is needed
 ```
 
 Pinning `SLINT_DART_LIBRARY` is what keeps the suites on that debug build:
@@ -435,9 +435,12 @@ embeds a font directory that only exists inside the Slint repository.
 
 ## Toolchain
 
-The Dart and Flutter SDK is pinned with [FVM](https://fvm.app) in `.fvmrc`, so
-every command above is available as `fvm dart …` and `fvm flutter …`. Run
-`fvm install` once to fetch the pinned version.
+The whole toolchain is pinned with [mise](https://mise.jdx.dev) in `.mise.toml`:
+the Rust toolchain (`rust`), the Dart SDK (`dart`), and the Flutter SDK
+(`flutter`). Run `mise install` once to fetch the pinned versions; with the mise
+shims on `PATH`, every command above is available as plain `dart`, `flutter`,
+`cargo`, and `rustc`. `cbindgen` (for regenerating the FFI bindings) is a Cargo
+binary, installed with `cargo install cbindgen`.
 
 ## Examples
 

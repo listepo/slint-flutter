@@ -27,12 +27,14 @@ a compiler-free runtime is not available instead.
 
 ## Prerequisites
 
-The Dart and Flutter SDK is pinned with [FVM](https://fvm.app) in `.fvmrc`
-(`"flutter": "stable"`), so every command below is available as `fvm dart …` and
-`fvm flutter …`. Run `fvm install` once to fetch the pinned version.
+The whole toolchain is pinned with [mise](https://mise.jdx.dev) in `.mise.toml`:
+the Rust toolchain (`rust`), the Dart SDK (`dart`), and the Flutter SDK
+(`flutter`). Run `mise install` once to fetch the pinned versions; with the
+mise shims on `PATH`, every command below is available as plain `dart`, `flutter`,
+`cargo`, and `rustc`.
 
-The Dart tests need a native library that `cargo` builds, so the Rust toolchain
-(`cargo`, `rustc`, and `cbindgen` for regenerating bindings) is also required.
+`cbindgen` (for regenerating the FFI bindings) is a Cargo binary, so install it
+with `cargo install cbindgen` rather than mise.
 
 ## Build Commands
 
@@ -42,7 +44,7 @@ and its sources are in `native/rust/`.
 ```sh
 cd native
 cargo build --release -p slint-dart      # the native library the bindings load
-cd ../slint && fvm dart pub get
+cd ../slint && dart pub get
 ```
 
 The `cdylib` is named `libslint_dart` (`libslint_dart.dylib` on macOS,
@@ -72,16 +74,16 @@ comment in `native/Cargo.toml` for why the published crate cannot provide one.
 cd native
 cargo build -p slint-dart --no-default-features --features renderer-software
 cd ../slint
-SLINT_DART_LIBRARY="$PWD/../native/target/debug/libslint_dart.dylib" fvm dart test
+SLINT_DART_LIBRARY="$PWD/../native/target/debug/libslint_dart.dylib" dart test
 cd ../slint_flutter
-SLINT_DART_LIBRARY="$PWD/../native/target/debug/libslint_dart.dylib" fvm flutter test
+SLINT_DART_LIBRARY="$PWD/../native/target/debug/libslint_dart.dylib" flutter test
 ```
 
 The `slint_generator` builder tests use a fake generator and never load the
 native library, so they need no `SLINT_DART_LIBRARY`:
 
 ```sh
-cd slint_generator && fvm dart test && fvm dart analyze
+cd slint_generator && dart test && dart analyze
 ```
 
 `dart test` also runs the build hook, which produces a default-feature release

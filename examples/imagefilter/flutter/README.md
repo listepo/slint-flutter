@@ -11,8 +11,8 @@ cargo build --release -p slint-dart-codegen
 cargo build --release -p slint-dart
 
 cd ../examples/imagefilter/flutter
-fvm dart pub get
-fvm dart run build_runner build --delete-conflicting-outputs
-fvm flutter create . --platforms=macos --project-name=imagefilter
-fvm flutter run -d macos
+dart pub get
+dart run build_runner build --delete-conflicting-outputs
+flutter create . --platforms=macos --project-name=imagefilter
+flutter run -d macos
 ```

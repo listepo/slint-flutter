@@ -1,0 +1,10 @@
+# Toolchain versions for this repository, managed by mise.
+#
+# The Rust workspace lives in native/ and requires edition 2024 (rust-version
+# 1.92); the Dart/Flutter SDK is pinned here instead of FVM. Run `mise install`
+# once to fetch these, or `mise install <tool>` for a single one.
+
+[tools]
+rust = "1.97.1"
+dart = "3.13.0"
+flutter = "3.47.0"

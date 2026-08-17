@@ -12,17 +12,17 @@ cargo build --release -p slint-dart-codegen
 cargo build --release -p slint-dart
 
 cd ../examples/native-gestures/flutter
-fvm dart pub get
-fvm dart run build_runner build --delete-conflicting-outputs
+dart pub get
+dart run build_runner build --delete-conflicting-outputs
 
 # First time only — create a platform runner:
-fvm flutter create . --platforms=macos --project-name native_gestures
+flutter create . --platforms=macos --project-name native_gestures
 
-fvm flutter run -d macos
+flutter run -d macos
 ```
 
 Keep the generator running while you edit the `.slint` file:
 
 ```sh
-fvm dart run build_runner watch --delete-conflicting-outputs
+dart run build_runner watch --delete-conflicting-outputs
 ```

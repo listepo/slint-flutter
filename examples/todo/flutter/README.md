@@ -21,10 +21,10 @@ cargo build --release -p slint-dart-codegen
 cargo build --release -p slint-dart
 
 cd ../examples/todo/flutter
-fvm dart pub get
-fvm dart run build_runner build --delete-conflicting-outputs
+dart pub get
+dart run build_runner build --delete-conflicting-outputs
 
-fvm flutter run -d macos
+flutter run -d macos
 ```
 
 Looking up generated `slint_aot_*` exports from Dart web is not wired yet, so
@@ -36,7 +36,7 @@ lands, the same generate step plus
 Keep the generator running while you edit the `.slint` file:
 
 ```sh
-fvm dart run build_runner watch --delete-conflicting-outputs
+dart run build_runner watch --delete-conflicting-outputs
 ```
 
 Widget tests use the embedded software renderer (`SlintSurface` via
@@ -44,6 +44,6 @@ Widget tests use the embedded software renderer (`SlintSurface` via
 sidecar — not a release library without `MainWindow`:
 
 ```sh
-fvm dart run build_runner build --delete-conflicting-outputs
-fvm flutter test
+dart run build_runner build --delete-conflicting-outputs
+flutter test
 ```

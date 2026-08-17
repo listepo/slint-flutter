@@ -15,10 +15,10 @@ cargo build --release -p slint-dart-codegen
 cargo build --release -p slint-dart
 
 cd slint_flutter/example
-fvm dart pub get
-fvm dart run build_runner build --delete-conflicting-outputs
+dart pub get
+dart run build_runner build --delete-conflicting-outputs
 
-fvm flutter run -d macos
+flutter run -d macos
 ```
 
 Use `linux` or `windows` in place of `macos` as needed.
@@ -31,18 +31,18 @@ The generated `CounterWindow` wrapper exposes `current-count` as `currentCount`,
 Keep the generator running while editing `lib/ui/counter.slint`:
 
 ```sh
-fvm dart run build_runner watch --delete-conflicting-outputs
+dart run build_runner watch --delete-conflicting-outputs
 ```
 
 Widget tests use the embedded software renderer (`SlintSurface` via
 `SlintView`) and a debug build of `libslint_dart`:
 
 ```sh
-fvm dart run build_runner build --delete-conflicting-outputs
+dart run build_runner build --delete-conflicting-outputs
 cd ../../native
 cargo build -p slint-dart --no-default-features --features renderer-software
 SLINT_DART_LIBRARY="$PWD/../../native/target/debug/libslint_dart.dylib" \
-  fvm flutter test
+  flutter test
 ```
 
 Use `libslint_dart.so` on Linux and `slint_dart.dll` on Windows.
