@@ -436,11 +436,12 @@ embeds a font directory that only exists inside the Slint repository.
 ## Toolchain
 
 The whole toolchain is pinned with [mise](https://mise.jdx.dev) in `.mise.toml`:
-the Rust toolchain (`rust`), the Dart SDK (`dart`), and the Flutter SDK
-(`flutter`). Run `mise install` once to fetch the pinned versions; with the mise
-shims on `PATH`, every command above is available as plain `dart`, `flutter`,
-`cargo`, and `rustc`. `cbindgen` (for regenerating the FFI bindings) is a Cargo
-binary, installed with `cargo install cbindgen`.
+the Rust toolchain (`rust`), the Dart SDK (`dart`), the Flutter SDK
+(`flutter`), and [Bazel](https://bazel.build) (`bazel`). Run `mise install` once
+to fetch the pinned versions; with the mise shims on `PATH`, every command above
+is available as plain `dart`, `flutter`, `cargo`, `rustc`, and `bazel`.
+`cbindgen` (for regenerating the FFI bindings) is a Cargo binary, installed with
+`cargo install cbindgen`.
 
 ## Examples
 
