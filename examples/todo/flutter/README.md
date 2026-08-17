@@ -23,23 +23,8 @@ cd examples/todo/flutter
 fvm dart pub get
 fvm dart run build_runner build --delete-conflicting-outputs
 
-# Rebuild the runtime so `.dart_tool/slint/aot` is compiled in
-# (the Flutter build hook does this automatically on `flutter run`/`build`):
-SLINT_DART_AOT_DIR="$PWD/.dart_tool/slint/aot" \
-  cargo build --release -p slint-dart
-
-fvm flutter create --platforms=macos --project-name=todo .
 fvm flutter run -d macos
 ```
-
-Use `linux` or `windows` in place of `macos` as needed.
-The runner directories are generated, not committed.
-If `flutter run` fails because Xcode cannot access
-`macos/Flutter/ephemeral/Packages/.packages/FlutterFramework`, delete `macos/`
-and run `flutter create` again.
-A runner generated without Swift Package Manager package references cannot be
-migrated in place. Recreating one platform's runner can leave another's in that
-state, so expect to redo this after adding a platform.
 
 Looking up generated `slint_aot_*` exports from Dart web is not wired yet, so
 the Chrome / wasm path does not yet instantiate `MainWindow.load()`. When that
@@ -59,10 +44,5 @@ sidecar — not a release library without `MainWindow`:
 
 ```sh
 fvm dart run build_runner build --delete-conflicting-outputs
-SLINT_DART_AOT_DIR="$PWD/.dart_tool/slint/aot" \
-  cargo build -p slint-dart --no-default-features --features renderer-software
-SLINT_DART_LIBRARY="$PWD/../../../target/debug/libslint_dart.dylib" \
-  fvm flutter test
+fvm flutter test
 ```
-
-Use `libslint_dart.so` on Linux and `slint_dart.dll` on Windows.

@@ -144,8 +144,9 @@ back in the shipped library.
 ### The binding (`slint/`)
 
 - `slint/lib/slint.dart` — the public API users see: `loadFile`/`loadSource`,
-  `ComponentInstance`, `SlintGlobal`, `runEventLoop`, `SlintTimer`, and the
-  callback dispatch over `NativeCallable.isolateLocal`.
+  `instantiateCompiled`, `ComponentInstance`, `SlintGlobal`, `runEventLoop`,
+  `SlintTimer`, `initTranslations`, and the callback dispatch over
+  `NativeCallable.isolateLocal`. It re-exports `SlintImage` from `image.dart`.
 - `slint/lib/src/ffi.dart` — `SlintFfi` adds only how the library is found and
   the JSON-envelope helpers (`takeEnvelope`, `takeString`, `withNativeString`);
   everything else lives in the generated `ffi.g.dart`. These three are the only
@@ -184,6 +185,17 @@ back in the shipped library.
 - `slint_flutter/lib/slint_flutter.dart` — `SlintView`, a widget that drives a
   `SlintSurface` each frame and dispatches pointer/key input to it.
 
+### Examples
+
+- [`slint_flutter/example`](./slint_flutter/example) — the code-generation
+  example, a Flutter application whose `CounterWindow` wrapper is generated
+  from `lib/ui/counter.slint` by `build_runner`.
+- [`examples/todo/flutter`](./examples/todo/flutter) — the todo demo, a Flutter
+  application with a generated `MainWindow` wrapper. Its `android/`, `ios/`,
+  `macos/` and `web/` platform runners are committed (standard Flutter
+  convention); the wasm build (`web/slint_dart.js`, `web/slint_dart_bg.wasm`)
+  is not.
+
 ## Key Patterns
 
 - Everything must be used from the main isolate, where the Slint event loop
@@ -202,11 +214,6 @@ back in the shipped library.
   must never be edited by hand. Don't run `dart format` on generated files.
 - Code style is enforced in CI: `dart format`/analyzer for Dart, `rustfmt` for
   Rust.
-
-- Every source file carries the two-line copyright and SPDX header. New files
-  get it too: `MIT` for this repository's own code, and whatever the original
-  carried for code lifted out of the Slint repository (`codegen/src/dart.rs` and the
-  `scripts/`, which keep Slint's triple license).
 
 ## Version Control (Git)
 

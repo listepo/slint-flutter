@@ -160,7 +160,8 @@ app.setCallback('todo-added', (args) {
 });
 ```
 
-See the [`slint` code-generation example](./slint/example) for a complete package.
+See the [`slint_flutter` code-generation example](./slint_flutter/example) for a
+complete Flutter application.
 
 ## Building
 
@@ -435,10 +436,12 @@ every command above is available as `fvm dart …` and `fvm flutter …`. Run
 
 ## Examples
 
-- [`slint/example`](./slint/example) — the code-generation example, a plain
-  `dart run` application.
-- The Flutter todo example and printer demo live in the Slint repository, under
-  `examples/todo/flutter` and `demos/printerdemo/flutter`.
+- [`slint_flutter/example`](./slint_flutter/example) — the code-generation
+  example, a Flutter application with a generated `CounterWindow` wrapper.
+- [`examples/todo/flutter`](./examples/todo/flutter) — the todo demo, also a
+  Flutter application with a generated `MainWindow` wrapper.
+- The printer demo lives in the Slint repository, under
+  `demos/printerdemo/flutter`.
 
 ## Limitations
 
