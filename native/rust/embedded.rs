@@ -89,6 +89,10 @@ pub extern "C" fn slint_dart_embedded_resize(
     scale_factor: f32,
 ) -> *mut c_char {
     guard(|| {
+        // A non-positive or non-finite scale factor would map physical pixels
+        // to nonsensical logical ones (NaN/infinite sizes) inside Slint's
+        // layout code. Only checked in debug builds.
+        debug_assert!(scale_factor > 0.0 && scale_factor.is_finite());
         let resized = with_window(|window| {
             if window.window().scale_factor() != scale_factor {
                 window.window().dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor });
@@ -177,6 +181,9 @@ pub extern "C" fn slint_dart_embedded_pointer_event(
     delta_y: f32,
 ) -> *mut c_char {
     guard(|| {
+        // NaN/infinite coordinates would poison hit-testing and layout with no
+        // visible error. Only checked in debug builds.
+        debug_assert!(x.is_finite() && y.is_finite());
         let position = LogicalPosition::new(x, y);
         let button = match button {
             1 => PointerEventButton::Right,

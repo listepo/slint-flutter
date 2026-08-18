@@ -2,10 +2,11 @@
 //!
 //! A generated `.slint.dart` embeds the whole `.slint` graph as one gzip+base64
 //! blob — see `codegen/src/bundle.rs`, which produces it at generate time —
-//! with imports rewritten to a virtual root and images inlined. `load()` hands
-//! that blob to [`instantiate`], which compiles it through the interpreter once
-//! per process, from memory, and then creates instances. Nothing reads `.slint`
-//! from disk, so the source need not ship with the application.
+//! with imports rewritten to a virtual root and relative `@image-url` and font
+//! references bundled once as assets. `load()` hands that blob to [`instantiate`],
+//! which compiles it through the interpreter once per process, from memory, and
+//! then creates instances. Nothing reads `.slint` from disk, so the source need
+//! not ship with the application.
 
 use std::collections::HashMap;
 use std::fs;
@@ -153,6 +154,14 @@ fn pick_component(
 
 pub(crate) fn decode_module(blob: &str) -> Result<serde_json::Value, String> {
     let compressed = STANDARD.decode(blob.trim()).map_err(|error| error.to_string())?;
+    // The wrapper embeds gzip over JSON over base64. A blob that is not a gzip
+    // stream means the codec drifted (e.g. a wrapper generated against a
+    // different `codegen` than this library) or the wrapper was hand-edited;
+    // `GzDecoder` would report a much less helpful error.
+    debug_assert!(
+        compressed.len() >= 2 && compressed[..2] == [0x1f, 0x8b],
+        "compiled module blob does not start with a gzip stream"
+    );
     let json = flate2::read::GzDecoder::new(compressed.as_slice());
     serde_json::from_reader(json).map_err(|error| error.to_string())
 }

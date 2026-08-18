@@ -106,6 +106,10 @@ class SlintSurface {
   /// device pixel ratio, mapping those to the logical pixels `.slint` code
   /// sizes itself in.
   void resize(int width, int height, {double scaleFactor = 1.0}) {
+    // A negative size would wrap in the FFI's u32 parameters, and a
+    // non-positive scale factor maps physical to nonsensical logical pixels.
+    assert(width >= 0 && height >= 0, 'surface size cannot be negative');
+    assert(scaleFactor > 0, 'scale factor must be positive');
     backend.embeddedResize(width, height, scaleFactor);
     _width = width;
     _height = height;
@@ -135,6 +139,8 @@ class SlintSurface {
     double deltaX = 0,
     double deltaY = 0,
   }) {
+    // NaN/infinite coordinates would poison Slint's hit-testing and layout.
+    assert(x.isFinite && y.isFinite, 'pointer coordinates must be finite');
     backend.embeddedPointerEvent(kind.code, x, y, button.code, deltaX, deltaY);
   }
 

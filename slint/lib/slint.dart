@@ -165,8 +165,30 @@ ComponentInstance loadSource(
 ///
 /// Generated wrappers call this from `load()`. The blob is the `.slint` graph
 /// compiled when the wrapper was generated, so the original file is not read.
-ComponentInstance instantiateCompiled(String module, {String? component}) =>
-    ComponentInstance._(backend.loadCompiled(module, component));
+ComponentInstance instantiateCompiled(String module, {String? component}) {
+  // The wrapper carries gzip over JSON over base64. A blob that is not that
+  // envelope (a stale wrapper from another codegen version, a hand-edited
+  // string) would only fail deep inside the native library; catch it here in
+  // debug builds with a message that points at the wrapper.
+  assert(
+    _isCompiledModule(module),
+    'instantiateCompiled expects a gzip+base64 compiled module, '
+    'the blob `slint-dart-generate` embeds in the generated wrapper',
+  );
+  return ComponentInstance._(backend.loadCompiled(module, component));
+}
+
+/// Debug-only check that [module] is the gzip+base64 envelope the generator
+/// emits: base64 that decodes to a gzip stream (magic bytes `1f 8b`).
+bool _isCompiledModule(String module) {
+  if (module.isEmpty) return false;
+  try {
+    final bytes = base64Decode(module);
+    return bytes.length >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b;
+  } on FormatException {
+    return false;
+  }
+}
 
 ComponentInstance _instantiate(
   int Function(int compiler) build, {
@@ -414,6 +436,12 @@ class SlintTimer {
 
   SlintTimer._(bool repeated, Duration interval, void Function() callback)
       : _id = _nextHandlerId++ {
+    // A zero-interval repeating timer fires on every event-loop tick, a busy
+    // loop; a single-shot zero timer ("as soon as possible") is legitimate.
+    assert(
+      !repeated || interval > Duration.zero,
+      'a periodic SlintTimer needs a positive interval',
+    );
     _installDispatchers();
     _timerHandlers[_id] = callback;
     _handle = backend.timerStart(repeated, interval.inMilliseconds, _id);

@@ -2,9 +2,10 @@
 //!
 //! A generated `.slint.dart` must not read `.slint` from disk: the file may not
 //! ship with the application at all. So every file the compiler touched goes
-//! into the wrapper — imports rewritten to a virtual root and `@image-url`
-//! inlined as data URIs — as one gzip+base64 string. The runtime hands that
-//! string back to the interpreter, which compiles it without a filesystem.
+//! into the wrapper — imports rewritten to a virtual root, relative `@image-url`
+//! and font references bundled once as assets — as one gzip+base64 string. The
+//! runtime hands that string back to the interpreter, which compiles it without
+//! a filesystem.
 //!
 //! `rust/compiled.rs` is the other half: it decodes this and instantiates.
 
@@ -52,7 +53,12 @@ pub fn bundle(main: &Document, loader: &TypeLoader, style: Option<&str>) -> Resu
         let virtual_url = mapping.get(&file.path).expect("every bundled file is mapped").clone();
         let mut source = file.source.clone();
         source = rewrite_imports(&source, &file.imports, &mapping);
-        source = rewrite_image_urls(&source, file.path.parent().unwrap_or(&file.path))?;
+        // Absolute image paths cannot ship with the application, so they are
+        // inlined as data URIs. Relative `@image-url`s are left in place and
+        // bundled once as assets below: the runtime materializes them next to
+        // the sources, and the interpreter resolves the reference from there —
+        // each image once, however many times it is referenced.
+        source = inline_absolute_image_urls(&source);
         bundled.insert(virtual_url, source);
     }
 
@@ -63,7 +69,8 @@ pub fn bundle(main: &Document, loader: &TypeLoader, style: Option<&str>) -> Resu
         .cloned()
         .ok_or_else(|| "The main Slint file was not bundled".to_string())?;
 
-    let assets = collect_font_assets(&files, &mapping)?;
+    let mut assets = collect_font_assets(&files, &mapping)?;
+    collect_image_assets(&files, &mapping, &mut assets)?;
 
     let mut json = serde_json::json!({
         "v": MODULE_VERSION,
@@ -159,8 +166,18 @@ fn rewrite_imports(
     result
 }
 
-fn rewrite_image_urls(source: &str, source_dir: &Path) -> Result<String, String> {
-    let mut replacements = Vec::new();
+/// One `@image-url("…")` reference, with the range of the quoted path inside
+/// the source it was scanned from.
+struct ImageUrl {
+    start: usize,
+    end: usize,
+    path: String,
+}
+
+/// Scan for every `@image-url("…")` reference in [source], skipping `data:` and
+/// `builtin:` URIs that need no embedding. The ranges index [source] itself.
+fn find_image_urls(source: &str) -> Vec<ImageUrl> {
+    let mut urls = Vec::new();
     let mut search_from = 0;
     while let Some(relative) = source[search_from..].find("@image-url") {
         let start = search_from + relative;
@@ -187,25 +204,102 @@ fn rewrite_image_urls(source: &str, source_dir: &Path) -> Result<String, String>
         };
         let path = &source[content_start..content_start + end];
         if !path.starts_with("data:") && !path.starts_with("builtin:") {
-            replacements.push((content_start, content_start + end, path.to_string()));
+            // The scanner works in byte offsets on a UTF-8 string; this guards
+            // the arithmetic (`content_start + end` is measured from a slice,
+            // so a mistake here would slice a wrong, possibly non-boundary
+            // range). Only checked in debug builds.
+            debug_assert_eq!(
+                &source[content_start..content_start + end],
+                path,
+                "@image-url range does not round-trip"
+            );
+            urls.push(ImageUrl {
+                start: content_start,
+                end: content_start + end,
+                path: path.to_string(),
+            });
         }
         search_from = content_start + end + quote.len_utf8();
     }
+    urls
+}
 
+/// An absolute `@image-url` path cannot ship with the application, so inline it
+/// as a data URI (the previous behaviour). Relative references are left alone:
+/// they are bundled once as assets and resolved by the interpreter against the
+/// materialized tree at load time.
+fn inline_absolute_image_urls(source: &str) -> String {
     let mut result = source.to_string();
-    for (start, end, path) in replacements.into_iter().rev() {
-        let resolved = if Path::new(&path).is_absolute() {
-            PathBuf::from(&path)
-        } else {
-            source_dir.join(&path)
-        };
-        let Ok(bytes) = std::fs::read(&resolved) else {
+    for url in find_image_urls(&result).into_iter().rev() {
+        if !Path::new(&url.path).is_absolute() {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(&url.path) else {
             continue;
         };
-        let uri = data_uri(&resolved, &bytes);
-        result.replace_range(start..end, &uri);
+        // Ranges were captured from `result`; replacements run in reverse so
+        // earlier indices stay valid. This catches any drift if that ever stops
+        // being true (e.g. a replacement that shifts the bytes under a pending
+        // range).
+        debug_assert!(url.start < url.end && url.end <= result.len());
+        debug_assert_eq!(&result[url.start..url.end], url.path);
+        result.replace_range(url.start..url.end, &data_uri(Path::new(&url.path), &bytes));
     }
-    Ok(result)
+    result
+}
+
+/// Bundle every relative `@image-url` once, keyed by its virtual path so the
+/// runtime materializes a single copy however many times the image is used.
+fn collect_image_assets(
+    files: &[BundledFile],
+    mapping: &HashMap<PathBuf, String>,
+    assets: &mut BTreeMap<String, String>,
+) -> Result<(), String> {
+    for file in files {
+        let Some(virtual_slint) = mapping.get(&file.path) else {
+            continue;
+        };
+        let source_dir = file.path.parent().unwrap_or(&file.path);
+        for url in find_image_urls(&file.source) {
+            let path = &url.path;
+            if path.starts_with("data:")
+                || path.starts_with("builtin:")
+                || Path::new(path).is_absolute()
+            {
+                continue;
+            }
+            let resolved = pathutils::join(source_dir, Path::new(path))
+                .unwrap_or_else(|| source_dir.join(path));
+            let virtual_path = virtual_resource_path(virtual_slint, path);
+            // The runtime materializes assets under the virtual root and the
+            // interpreter resolves the reference from the same tree; a key
+            // outside it (e.g. an absolute path leaking through) would put the
+            // file where nothing looks for it.
+            debug_assert!(
+                virtual_path.starts_with(VIRTUAL_ROOT),
+                "image {path} escaped the virtual root: {virtual_path}"
+            );
+            // A missing image is left as a plain reference, as before: it may
+            // be decorative, and the old data-URI pass silently skipped it too.
+            let Ok(bytes) = std::fs::read(&resolved) else {
+                continue;
+            };
+            let encoded = STANDARD.encode(bytes);
+            if let Some(existing) = assets.get(&virtual_path) {
+                // The same key means the same file: repeated references dedup
+                // to identical bytes. Two different files sharing a key (say an
+                // image colliding with a font of the same name) is a bug that
+                // would silently drop one of them.
+                debug_assert_eq!(
+                    existing, &encoded,
+                    "two different resources resolve to {virtual_path}"
+                );
+                continue;
+            }
+            assets.insert(virtual_path, encoded);
+        }
+    }
+    Ok(())
 }
 
 fn data_uri(path: &Path, bytes: &[u8]) -> String {
@@ -258,11 +352,13 @@ fn extract_font_imports(source: &str) -> Vec<String> {
     imports
 }
 
-fn virtual_font_path(virtual_slint: &str, import: &str) -> String {
+/// The virtual path a resource referenced from the virtual `.slint` file
+/// [virtual_slint] resolves to — the location the runtime materializes it at.
+fn virtual_resource_path(virtual_slint: &str, resource: &str) -> String {
     let slint_path = Path::new(virtual_slint);
     let parent = slint_path.parent().unwrap_or(Path::new(VIRTUAL_ROOT));
-    pathutils::join(parent, Path::new(import))
-        .unwrap_or_else(|| parent.join(import))
+    pathutils::join(parent, Path::new(resource))
+        .unwrap_or_else(|| parent.join(resource))
         .to_string_lossy()
         .replace('\\', "/")
 }
@@ -284,10 +380,9 @@ fn collect_font_assets(
                 pathutils::join(source_dir, Path::new(&import))
                     .unwrap_or_else(|| source_dir.join(&import))
             };
-            let bytes = std::fs::read(&resolved).map_err(|error| {
-                format!("Cannot read font {}: {error}", resolved.display())
-            })?;
-            let virtual_path = virtual_font_path(virtual_slint, &import);
+            let bytes = std::fs::read(&resolved)
+                .map_err(|error| format!("Cannot read font {}: {error}", resolved.display()))?;
+            let virtual_path = virtual_resource_path(virtual_slint, &import);
             assets.insert(virtual_path, STANDARD.encode(bytes));
         }
     }

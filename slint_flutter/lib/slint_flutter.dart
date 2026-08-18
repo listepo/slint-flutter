@@ -94,6 +94,15 @@ class _SlintViewState extends State<SlintView>
     final pixels = _surface.render();
     if (pixels == null) return;
 
+    // The renderer's buffer contract: one RGBA byte-quad per surface pixel.
+    // A mismatch means the buffer is stale relative to the surface size and
+    // would silently mis-draw.
+    assert(
+      pixels.length == _surface.width * _surface.height * 4,
+      'renderer returned ${pixels.length} bytes for '
+      '${_surface.width}x${_surface.height}',
+    );
+
     // `decodeImageFromPixels` reads the buffer asynchronously, and the next
     // render would overwrite it, so hand over a copy.
     _decoding = true;

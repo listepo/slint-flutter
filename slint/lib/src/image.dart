@@ -105,6 +105,9 @@ class SlintImage {
   final int height;
 
   static Uint8List _copyRgba(int width, int height, Uint8List pixels) {
+    // A negative dimension makes the expected-length check below meaningless
+    // (it can never match), so catch it with a clear message first.
+    assert(width >= 0 && height >= 0, 'image dimensions cannot be negative');
     final expected = width * height * 4;
     if (pixels.length != expected) {
       throw ArgumentError.value(

@@ -647,6 +647,10 @@ pub unsafe extern "C" fn slint_dart_timer_start(
     callback: unsafe extern "C" fn(user_data: *mut c_void),
     user_data: *mut c_void,
 ) -> *mut Timer {
+    // A zero-interval repeating timer fires on every event-loop tick — a busy
+    // loop with no backpressure. A single-shot zero timer ("as soon as
+    // possible") is legitimate. Only checked in debug builds.
+    debug_assert!(!(repeated && interval_ms == 0), "repeating timer with a zero interval");
     let mode = if repeated { TimerMode::Repeated } else { TimerMode::SingleShot };
     let timer = Box::new(Timer::default());
     // Raw pointers aren't `Send`, but Slint timers only ever fire on the event
@@ -1148,6 +1152,71 @@ mod tests {
 
         let instance = compiled::instantiate(&blob, Some("App")).unwrap();
         assert_eq!(instance.get_property("n").unwrap(), slint_interpreter::Value::Number(9.0));
+    }
+
+    /// The Rust generators embed a resource once per path, and so does this
+    /// bundler: an image referenced twice is carried once as an asset, not
+    /// twice as inlined data URIs, and it still instantiates with no source
+    /// (or image) left on disk.
+    #[test]
+    fn a_generated_wrapper_bundles_repeated_images_once() {
+        i_slint_backend_testing::init_no_event_loop();
+        let directory = std::env::temp_dir().join(format!(
+            "slint-dart-aot-img-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        // A 1x1 red PNG.
+        let png = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",
+        )
+        .unwrap();
+        std::fs::write(directory.join("pixel.png"), &png).unwrap();
+        let input = directory.join("app.slint");
+        std::fs::write(
+            &input,
+            r#"
+                export component App {
+                    in-out property <image> a: @image-url("pixel.png");
+                    in-out property <image> b: @image-url("pixel.png");
+                }
+            "#,
+        )
+        .unwrap();
+
+        let generation = slint_dart_codegen::generate(
+            &input,
+            &directory.join("app.slint.dart"),
+            slint_dart_codegen::Options::default(),
+        );
+        let source = generation.dart.expect("generated Dart");
+        let blob = compiled_blob_from_dart(&source).to_string();
+
+        let module = compiled::decode_module(&blob).unwrap();
+        let files = module["files"].as_object().unwrap();
+        let assets = module["assets"].as_object().unwrap();
+        assert_eq!(assets.len(), 1, "the repeated image must be bundled once: {assets:?}");
+        assert!(assets.contains_key("/slint-aot/pixel.png"));
+        assert!(
+            !files.values().any(|v| v.as_str().is_some_and(|s| s.contains("data:image"))),
+            "no image may be inlined into the source"
+        );
+
+        // Nothing may be read from disk from here on.
+        std::fs::remove_dir_all(&directory).unwrap();
+
+        let instance = compiled::instantiate(&blob, Some("App")).unwrap();
+        let slint_interpreter::Value::Image(image) = instance.get_property("a").unwrap() else {
+            panic!("expected an image property");
+        };
+        let path = image.path().expect("image resolves to a path").to_string_lossy().into_owned();
+        assert!(
+            path.contains("slint-aot") && path.ends_with("pixel.png"),
+            "unexpected path: {path}"
+        );
+        assert!(std::path::Path::new(&path).exists(), "materialized image missing: {path}");
     }
 
     #[test]
