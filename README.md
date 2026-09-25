@@ -521,3 +521,11 @@ that still declare `publish_to: none`).
 - A Rust panic on the web aborts the module instead of unwinding, so the
   `catch_unwind` guards that turn a panic into a `SlintException` elsewhere do
   not apply there. The message still reaches the browser console.
+
+## License
+
+You can use this project under **any** of the following licenses, at your choice:
+
+1. [GNU GPLv3](LICENSE): free for open source applications on any platform, including embedded systems.
+2. [Royalty-free License](LICENSE-ROYALTY-FREE.md): free for proprietary desktop, mobile, and web applications, as long as you disclose that your application uses this project. Embedded systems are not covered.
+3. [Commercial license](PRICING.md): for proprietary applications, including embedded systems, without the attribution requirement.
